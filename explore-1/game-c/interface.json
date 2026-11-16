@@ -1,0 +1,41 @@
+{
+  "canvas": { "width": 1280, "height": 720 },
+  "notes": [
+    "座標: 除註明為『左上角』者外, 所有 x, y 都是物件判定框的中心點, 單位 px, 以 1280x720 畫布為準; 關卡是不捲動的單畫面, 沒有鏡頭位移。",
+    "時間類欄位單位一律為秒。『xxT』是事件開始後已過秒數, 搭配『xxDur』總長; 閒置(沒在播)時 xxT = xxDur。",
+    "職業代碼 cls: 'assassin' 刺客(判定框 28x36)、'knight' 重騎(32x44)、'wind' 風術士(28x44)。",
+    "大地圖縮圖: RD 在關卡卡片內距卡片左上 (8,8) 處, 以 ctx.translate + ctx.scale(0.3) 重用關卡內的 drawBackground / drawGround / drawSpike / drawIronCrate / drawPressurePlate / drawHeavyGate / drawWindmill / drawCoin / drawGoal / drawGhost 畫出 384x216 的縮圖並裁切在該區域內。縮圖不畫怪物、不畫上升氣流。",
+    "文字歸屬: 每個繪圖函式自己畫它面板 / 卡片內的全部文字(含按鍵提示), 數值由 state 傳入; 大地圖最下方 y=660~710 的一行操作提示由 RD 用 fillText 畫(美術不畫)。",
+    "大地圖固定版位(左上角): 關卡卡片 (30,60)、(440,60)、(850,60); 職業卡片 (30,370)、(290,370)、(550,370); 終極目標卡片 (30,530)。由 RD 以 state 的 x, y 傳入。"
+  ],
+  "draw": [
+    { "name": "drawBackground", "state": [], "notes": "關卡背景, 畫滿 1280x720。三關共用。" },
+    { "name": "drawMapBackground", "state": [], "notes": "大地圖背景, 畫滿 1280x720。" },
+    { "name": "drawGround", "state": ["x", "y", "top"], "size": [40, 40], "notes": "實心地形一格。top=true 表示上方那格沒有地形(畫頂面)。窄道就是由地形排出的 1 格高通道, 不另畫。" },
+    { "name": "drawSpike", "state": ["x", "y"], "size": [40, 40], "notes": "一格尖刺, 判定為下半 40x20, 尖刺畫在下半。" },
+    { "name": "drawIronCrate", "state": ["x", "y"], "size": [40, 40], "notes": "鐵箱, 實心一格, 要看得出很重、和地面不同。被重騎撞碎後 RD 不再畫並改畫 drawPoof。" },
+    { "name": "drawPressurePlate", "state": ["x", "y", "pressed"], "size": [40, 12], "notes": "重壓踏板, 中心在這 40x12 的中心, 底邊貼地面。pressed=true 為已壓下(整趟維持), 畫成下沉。" },
+    { "name": "drawHeavyGate", "state": ["x", "y"], "size": [40, 40], "notes": "重閘門一格(關閉, 實心)。踏板壓下後整排 RD 直接不畫, 沒有開啟動畫。要和踏板看得出是一組(例如同一個標記)。" },
+    { "name": "drawWindmill", "state": ["x", "y", "active", "t"], "size": [40, 40], "notes": "風車, 底邊貼地。active=false 靜止; true 轉動, t 為遊戲經過秒數用來畫旋轉。扇葉可超出框外至多 10px。" },
+    { "name": "drawUpdraft", "state": ["x", "y", "t"], "size": [40, 240], "notes": "上升氣流, 寬 40、高 240, x,y 為氣流區域中心(底邊在風車頂)。只在風車轉動後畫。t 為遊戲經過秒數, 畫往上流動的線條, 半透明, 不遮住氣流裡的玩家。" },
+    { "name": "drawCoin", "state": ["x", "y", "t"], "size": [24, 24], "notes": "金幣, 可撿。t 為遊戲經過秒數, 可畫旋轉 / 閃光。" },
+    { "name": "drawGoal", "state": ["x", "y", "reached"], "size": [40, 80], "notes": "終點旗, 高 2 格, 底邊貼地。" },
+    { "name": "drawPlayer", "state": ["x", "y", "cls", "facing", "pose", "dashAngle", "invuln"], "size": [32, 44], "notes": "size 為三職業中最大者; 實際判定框依 cls(見全域 notes), 美術依職業畫在各自的框內, 中心對齊 x,y。facing: 1 右 / -1 左。pose: 'idle'|'run'|'rise'|'fall'|'dash'|'slam'(重騎震地下墜)|'glide'(風術士)|'hurt'。dashAngle: 衝刺方向(弧度, 0 朝右、順時針為正), 只在 pose='dash' 時有意義; 衝刺時的刀光與殘影線畫在框外、衝刺方向的反方向至多 60px。" },
+    { "name": "drawGhost", "state": ["x", "y", "cls", "facing", "pose", "dashAngle"], "size": [32, 44], "notes": "大地圖縮圖裡的回放角色, 外形同 drawPlayer 同職業同動作但為半透明殘影。" },
+    { "name": "drawImp", "state": ["x", "y", "facing", "t"], "size": [32, 32], "notes": "小鬼, 地面巡走, 1 血。底邊貼地。t 為遊戲經過秒數畫走路。" },
+    { "name": "drawEye", "state": ["x", "y", "t"], "size": [32, 32], "notes": "飛眼, 原地上下飄, 1 血。t 為遊戲經過秒數。" },
+    { "name": "drawBlade", "state": ["x", "y", "t"], "size": [24, 24], "notes": "刺客的回刃, t 為丟出後經過秒數, 畫旋轉。" },
+    { "name": "drawSlamWave", "state": ["x", "y", "t", "dur", "radius"], "size": [200, 200], "notes": "重騎震地落地的範圍特效, 中心為落地點(玩家腳下中心)。radius 為外緣半徑 100, 判定就是這個圓; t 從 0 走到 dur(0.25), 由小擴到外緣並淡出, 播完 RD 不再呼叫。" },
+    { "name": "drawPoof", "state": ["x", "y", "t", "dur"], "size": [48, 48], "notes": "一次性煙霧/碎屑: 怪物倒下、鐵箱碎掉時。t 從 0 走到 dur(0.3)。" },
+    { "name": "drawLevelCard", "state": ["x", "y", "index", "name", "state", "rate", "recordCls", "speedLv", "speedCost", "speedCanAfford", "cost", "canAfford", "selected"], "size": [400, 290], "notes": "x,y 為卡片左上角。index 從 1 起算。state: 'locked'|'open'|'cleared'。上方 (8,8) 起 384x216 為縮圖區: open / cleared 時 RD 在本函式之後把縮圖畫進去, 美術只畫縮圖外框; locked 時 RD 不畫縮圖, 美術在縮圖區畫上鎖與解鎖花費 cost(canAfford=false 時看得出不足)。下方 224~290 文字區: 關卡名 name; cleared 時畫效率 rate(已含加速倍率, 每分鐘, 小數 1 位)、回放職業 recordCls 小圖示、加速等級 speedLv(0~2, 畫成 2 格, 並標倍率 ×1 / ×1.25 / ×1.5)、下一級加速花費 speedCost 與按鍵提示『X 加速』(speedLv=2 時 speedCost 為 null, 畫『加速已滿』; speedCanAfford=false 時看得出不足); open 時畫『未過關』, 不畫加速。selected=true 畫選取框, 可畫到框外 6px。" },
+    { "name": "drawClassCard", "state": ["x", "y", "cls", "name", "state", "cost", "canAfford", "selected"], "size": [240, 140], "notes": "x,y 為左上角。畫職業頭像與名稱 name。state: 'locked'(畫花費 cost 與不足狀態)|'owned'|'active'(目前職業, 明顯標示)。selected=true 畫選取框, 可畫到框外 6px。" },
+    { "name": "drawGoalCard", "state": ["x", "y", "cost", "canAfford", "selected"], "size": [1220, 90], "notes": "終極目標『黃金王冠』, x,y 為左上角。畫名稱、花費 cost、canAfford 狀態。selected=true 畫選取框, 可畫到框外 6px。" },
+    { "name": "drawPopup", "state": ["x", "y", "t", "dur", "value"], "size": [48, 24], "notes": "回放撿到金幣時的浮字, 畫在大地圖螢幕座標。value 為 1~3, 畫『+value』與金幣小圖示, value 越大越醒目(例如 3 最大最亮)。t 從 0 走到 dur(0.8), 美術自行上移 30px 並淡出。" },
+    { "name": "drawHud", "state": ["mode", "stock", "incomePerMin", "time", "runValue", "recordRate", "hp", "maxHp", "combo", "comboT", "comboDur", "airDash", "maxAirDash", "skillCdT", "skillCdDur", "cls"], "size": [1280, 40], "notes": "固定在畫面頂端 (0,0) 起 1280x40, 可半透明。mode='map' 只畫持有金幣 stock 與每分鐘總產量 incomePerMin(小數 1 位), 其餘欄位為 null。mode='level' 再畫: 這趟秒數 time(小數 1 位)、這趟金幣總價值 runValue、此關回放效率 recordRate(沒有為 null, 畫『—』)、血量 hp/maxHp、連段數 combo 與剩餘計時(comboT 已過秒數 / comboDur=1.5, 畫成會縮短的計量條; combo=0 時 comboT=comboDur, 不畫計量條)、目前金幣價值階段要看得出(連段 1~3 / 4~6 / 7+ 對應 ×1 / ×2 / ×3)、空中衝刺剩餘 airDash / maxAirDash(1 或 2 格)、技能冷卻 skillCdT/skillCdDur(閒置 skillCdT=skillCdDur; 風術士滑翔沒有冷卻, 傳 1/1)、目前職業 cls 小圖示。" },
+    { "name": "drawResultPanel", "state": ["time", "value", "rate", "oldRate", "maxCombo"], "size": [640, 400], "notes": "過關結算, 固定左上 (320,160)。畫『過關』、秒數 time、金幣總價值 value、效率 rate、最高連段 maxCombo。oldRate=null(首次過關): 畫『已存成回放』與『Z 回大地圖』。oldRate 有值: 新舊效率並列比較(新的較高 / 較低要看得出), 並畫『Z 採用這一趟  X 保留舊的』。" },
+    { "name": "drawFailPanel", "state": [], "size": [520, 240], "notes": "失敗面板, 固定左上 (380,240)。畫『失敗』與『Z 重來  X 回大地圖』。" },
+    { "name": "drawPausePanel", "state": ["mode"], "size": [520, 280], "notes": "暫停面板, 固定左上 (380,220), 背後全畫面半透明暗幕也由本函式畫。mode='level' 畫『暫停』與『Esc 繼續  Z 重來  X 回大地圖』; mode='map' 只畫『暫停』與『Esc 繼續』。" },
+    { "name": "drawEndingPanel", "state": ["totalTime"], "size": [720, 420], "notes": "勝利面板, 固定左上 (280,150)。畫『取得黃金王冠』、總遊玩時間 totalTime(秒, 美術格式化成 分:秒)、『Z 重新開始』。" }
+  ],
+  "guidePages": 5
+}

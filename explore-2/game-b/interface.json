@@ -1,0 +1,41 @@
+{
+  "canvas": { "width": 1280, "height": 720 },
+  "notes": [
+    "座標: 除註明為『左上角』者外, 所有 x, y 都是物件判定框的中心點, 單位 px。關卡會水平捲動(關卡寬 2560): 傳給繪圖函式的 x, y 一律是**螢幕座標**(RD 已扣掉鏡頭位移), 美術不必處理鏡頭; 畫面外的物件 RD 不呼叫。",
+    "時間類欄位單位一律為秒。『xxT』是事件開始後已過秒數, 搭配『xxDur』總長; 閒置(沒在播)時 xxT = xxDur。『t』是遊戲經過秒數, 用來畫循環動畫。",
+    "物種代碼 sp: 'squirrel' 松鼠(判定框 28x32)、'pangolin' 穿山甲(32x28)、'bear' 熊(36x44)。素材代碼 kind: 'acorn' 橡實、'ore' 晶礦、'honey' 蜂蜜。",
+    "素材組物件(stock、run、cost、rates 等)一律是 { acorn, ore, honey } 三個數字; cost 裡不需要的那種為 0, 美術只畫大於 0 的種類。",
+    "受擊閃欄位 hit: true 表示這 0.1 秒內剛受到傷害, 畫成閃白一下。暈眩欄位 stun: true 表示被熊搖晃暈眩中, 畫成頭上冒星(星星畫在框外上方至多 16px)。",
+    "大地圖縮圖(回放): RD 在關卡卡片內距卡片左上 (8,8) 處, 以 ctx.translate + ctx.scale(0.3) 重用關卡內的所有繪圖函式, 畫出錄影當時的鏡頭畫面(1280x720 → 384x216)並裁切在該區域內; 整關重演, 怪物與擊殺都要畫。",
+    "文字歸屬: 每個繪圖函式自己畫它面板 / 卡片內的全部文字(含按鍵提示), 數值由 state 傳入; 大地圖最下方 y=670~710 的一行操作提示『↑↓←→ 選擇  Z 確定  空白鍵 說明  Esc 暫停』由 RD 用 fillText 畫(美術不畫)。",
+    "大地圖固定版位(左上角, 由 RD 以 state 的 x, y 傳入): 關卡卡片 (30,50)、(440,50)、(850,50); 動物卡片 (30,350)、(440,350)、(850,350); 終極目標卡片 (30,510)。"
+  ],
+  "draw": [
+    { "name": "drawBackground", "state": [], "notes": "關卡背景(森林), 畫滿 1280x720, 不隨鏡頭移動。三關共用。" },
+    { "name": "drawMapBackground", "state": [], "notes": "大地圖背景, 畫滿 1280x720。" },
+    { "name": "drawGround", "state": ["x", "y", "kind", "top"], "size": [40, 40], "notes": "實心地形一格。kind: 'dirt'(地面與地下的土牆)|'leaf'(樹冠平台, 看得出是樹冠)。top=true 表示上方那格沒有地形(畫頂面)。" },
+    { "name": "drawSoil", "state": ["x", "y", "open"], "size": [40, 40], "notes": "軟土一格, 要和 kind='dirt' 的實心土一眼分得出(鬆軟、可鑽)。open=true 表示穿山甲目前正在鑽地(按住技能), 畫成半透明讓玩家看得到土裡的穿山甲; false 畫成實心。" },
+    { "name": "drawSpike", "state": ["x", "y"], "size": [40, 40], "notes": "一格尖刺, 判定為下半 40x20, 尖刺畫在下半。" },
+    { "name": "drawHive", "state": ["x", "y", "shaken"], "size": [36, 44], "notes": "蜂巢, 掛在樹枝下(樹枝可畫到框外上方至多 20px)。shaken=true 為已搖過(空巢, 看得出拿不到了)。" },
+    { "name": "drawPickup", "state": ["x", "y", "kind", "t"], "size": [24, 24], "notes": "地上的素材。kind: 'acorn'|'ore'|'honey', 三種形狀與顏色要一眼分得出。t 可畫輕微浮動或閃光(位移在框內)。" },
+    { "name": "drawGoal", "state": ["x", "y", "reached"], "size": [40, 80], "notes": "終點旗, 高 2 格, 底邊貼地。" },
+    { "name": "drawPlayer", "state": ["x", "y", "sp", "facing", "pose", "poseT", "invuln"], "size": [36, 44], "notes": "size 為三物種中最大者; 實際判定框依 sp(見全域 notes), 美術依物種畫在各自的框內, 中心對齊 x,y。facing: 1 右 / -1 左。pose: 'idle'|'run'|'rise'|'fall'|'throw'(松鼠丟橡實)|'roll'(穿山甲翻滾)|'swipe'(熊掌)|'glide'(松鼠滑翔)|'dig'(穿山甲在軟土裡)|'shake'(熊搖晃)|'hurt'。poseT 為進入該動作後經過秒數。swipe 的爪痕畫在面向側框外 60x44 範圍內, 持續 0.15 秒。invuln=true 時畫成閃爍。" },
+    { "name": "drawHedgehog", "state": ["x", "y", "facing", "hit", "stun", "t"], "size": [36, 28], "notes": "刺蝟, 底邊貼地。背刺要明顯, 讓人一看就知道不能踩。" },
+    { "name": "drawSnake", "state": ["x", "y", "facing", "state", "stateT", "hit", "stun"], "size": [56, 28], "notes": "蛇與牠的草叢, 底邊貼地, x,y 為草叢中心(草叢 40x28, 置中)。state: 'hide'(只畫草叢, 可隱約露出眼睛)|'strike'(0.25 秒內往 facing 方向竄出 80px)|'out'(停在外面 1 秒)|'retreat'(0.5 秒縮回)。stateT 為進入該狀態後經過秒數。蛇身竄出時超出 56px 框的部分畫在框外, 竄出最遠時蛇頭中心在 x + facing*80; 判定框由 RD 另算。草叢在任何狀態都要畫。" },
+    { "name": "drawWasp", "state": ["x", "y", "facing", "state", "hit", "stun", "t"], "size": [28, 24], "notes": "黃蜂, 空中。state: 'idle'(在巢邊飄)|'chase'(追擊, 要看得出被惹毛了)。" },
+    { "name": "drawMole", "state": ["x", "y", "state", "hit", "stun"], "size": [32, 32], "notes": "地鼠與地洞, x,y 為地鼠冒出時的中心, 地洞畫在框底部(底邊貼地)。state: 'hide'(只畫地洞)|'up'(冒出)。" },
+    { "name": "drawAcornShot", "state": ["x", "y", "t"], "size": [12, 12], "notes": "松鼠丟出的橡實彈, t 為丟出後經過秒數(可畫旋轉)。要和地上的橡實素材分得出(例如較小、有速度線)。" },
+    { "name": "drawShakeWave", "state": ["x", "y", "t", "dur", "radius"], "size": [240, 240], "notes": "熊搖晃的範圍特效, 中心為熊的中心。radius=120 為判定外緣半徑。t 從 0 走到 dur(0.3), 由小擴到外緣並淡出。" },
+    { "name": "drawPoof", "state": ["x", "y", "t", "dur"], "size": [48, 48], "notes": "一次性煙霧: 怪物倒下時。t 從 0 走到 dur(0.3)。" },
+    { "name": "drawPopup", "state": ["x", "y", "t", "dur", "kind", "value"], "size": [64, 24], "notes": "得到素材時的浮字『+value』加 kind 素材小圖示, 關卡內與縮圖內共用。value 為字串, 可能是 '1'、'2'、'3', 或金章時的 '1.5'、'3'、'4.5'(RD 已格式化)。t 從 0 走到 dur(0.8), 美術自行上移 30px 並淡出(上移部分畫在框外上方, 屬預期)。" },
+    { "name": "drawLevelCard", "state": ["x", "y", "index", "name", "state", "rates", "recordSp", "recordTime", "parTime", "gold", "cost", "canAfford", "selected"], "size": [400, 290], "notes": "x,y 為卡片左上角。index 從 1 起算。state: 'locked'|'open'|'cleared'。上方 (8,8) 起 384x216 為縮圖區: open / cleared 時 RD 在本函式之後把縮圖畫進去, 美術只畫縮圖外框; locked 時 RD 不畫縮圖, 美術在縮圖區畫上鎖與解鎖花費 cost(canAfford=false 時看得出不足)。下方 y+224~y+290 文字區: 關卡名 name 與標準時間 parTime(秒, open / cleared 都畫); cleared 時另畫三種素材各自每分鐘產量 rates(小數 1 位, 已含金章, 不含現場加成; 0 也畫 0.0)、回放動物 recordSp 小圖示、回放秒數 recordTime(小數 1 位), gold=true 時畫金章圖示(明顯), false 時畫灰色空章。open 時畫『未過關』。selected=true 畫選取框, 可畫到框外 6px。" },
+    { "name": "drawSpeciesCard", "state": ["x", "y", "sp", "name", "state", "cost", "canAfford", "selected"], "size": [400, 140], "notes": "x,y 為左上角。畫動物頭像與名稱 name, 以及一行特長(松鼠『滑翔 / 上樹冠』、穿山甲『鑽地 / 進地下』、熊『搖蜂巢』, 美術照此固定文字畫)。state: 'locked'(畫花費 cost 與不足狀態)|'owned'|'active'(目前動物, 明顯標示)。selected=true 畫選取框, 可畫到框外 6px。" },
+    { "name": "drawGoalCard", "state": ["x", "y", "cost", "canAfford", "selected"], "size": [1220, 110], "notes": "終極目標『森林祭典』, x,y 為左上角。畫名稱、花費 cost、canAfford 狀態。selected=true 畫選取框, 可畫到框外 6px。" },
+    { "name": "drawHud", "state": ["mode", "stock", "ratePerMin", "liveBoost", "time", "parTime", "run", "hp", "maxHp", "skillCdT", "skillCdDur", "sp"], "size": [1280, 40], "notes": "固定在畫面頂端 (0,0) 起 1280x40, 可半透明。stock 為整數。mode='map' 只畫三種素材持有數 stock 與各自每分鐘總產量 ratePerMin(小數 1 位), 其餘欄位為 null。mode='level' 再畫: 現場加成 liveBoost(true 時畫醒目的『現場加成 ×2』, false 不畫; 此時 ratePerMin 已是加成後的值)、這趟秒數 time(小數 1 位)與標準時間 parTime 並列(time ≤ parTime 時看得出還在標準內, 超過時看得出超過)、這趟已拿到的三種素材 run、血量 hp/maxHp、技能冷卻 skillCdT/skillCdDur(閒置 skillCdT=skillCdDur; 松鼠滑翔、穿山甲鑽地沒有冷卻, 傳 1/1)、目前動物 sp 小圖示。" },
+    { "name": "drawResultPanel", "state": ["time", "parTime", "gold", "run", "rates", "sp", "replaced"], "size": [720, 420], "notes": "過關結算, 固定左上 (280,150)。畫『過關』、秒數 time 與標準時間 parTime、gold=true 時畫金章與『重播產量 ×1.5』, false 時畫『未達標準時間』、這趟三種素材 run、三種素材每分鐘 rates(已含金章)、動物 sp 小圖示。replaced=true 畫『已取代舊回放』, false(首次過關)畫『已存成回放』。最下方畫『Z 回大地圖  X 再跑一次』。" },
+    { "name": "drawFailPanel", "state": [], "size": [520, 240], "notes": "失敗面板, 固定左上 (380,240)。畫『失敗』與『Z 重來  X 回大地圖』。" },
+    { "name": "drawPausePanel", "state": ["mode"], "size": [520, 280], "notes": "暫停面板, 固定左上 (380,220), 背後全畫面半透明暗幕也由本函式畫。mode='level' 畫『暫停』與『Esc 繼續  Z 重來  X 回大地圖』, 下方小字『回大地圖: 這趟不算, 舊回放保留』; mode='map' 只畫『暫停』與『Esc 繼續』。" },
+    { "name": "drawEndingPanel", "state": ["totalTime"], "size": [720, 420], "notes": "勝利面板, 固定左上 (280,150)。畫『森林祭典開始了』、總遊玩時間 totalTime(秒, 美術格式化成 分:秒)、『Z 重新開始』。" }
+  ],
+  "guidePages": 5
+}

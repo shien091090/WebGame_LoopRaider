@@ -462,6 +462,8 @@ function updMons(dt) {
       m.fl.t -= dt;
       S.mons.forEach(function (o) {
         if (o !== m && o.al && m.al && !m.fl.hits[o.id] && overlap(m, o)) {
+          /* 同方向一起飛的不算撞擊(避免同一次震波飛出的怪互相無限對撞) */
+          if (o.fl && o.fl.dir === m.fl.dir) return;
           m.fl.hits[o.id] = 1;
           if (damageMon(o, 2, { type: 'fling', aid: m.fl.aid }) && o.al) startFling(o, m.fl.dir, m.fl.aid);
         }

@@ -11,7 +11,7 @@ var SPECIES = {
 var SP_ORDER = ['squirrel', 'pangolin', 'bear'];
 var SP_COST = {
   squirrel: { acorn: 0, ore: 0, honey: 0 },
-  pangolin: { acorn: 40, ore: 15, honey: 0 },
+  pangolin: { acorn: 40, ore: 0, honey: 0 },
   bear: { acorn: 0, ore: 30, honey: 15 }
 };
 var GOAL_COST = { acorn: 150, ore: 120, honey: 100 };

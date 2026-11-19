@@ -1,7 +1,7 @@
 stage: deepen(深掘)
-rounds: 探索 2, 深掘 2, 打磨 0
-current: deepen-2
-status: 等待試玩回饋
+rounds: 探索 2, 深掘 3, 打磨 0
+current: deepen-3
+status: 製作中
 log:
 - 2026-11-16 建立專案, 玩法寫入 idea.md
 - 2026-11-16 探索第1輪設計完成, 3 款: game-a, game-b, game-c
@@ -12,3 +12,5 @@ log:
 - 2026-11-18 深掘第1輪設計完成, 3 款: game-a, game-b, game-c
 - 2026-11-18 深掘第1輪檢討假設完成, 選擇: continue
 - 2026-11-18 深掘第2輪設計完成, 3 款: game-a, game-b, game-c
+- 2026-11-19 深掘第2輪檢討假設完成, 選擇: continue
+- 2026-11-19 深掘第3輪設計完成, 3 款: game-a, game-b, game-c

@@ -1,0 +1,4 @@
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+body { display: flex; align-items: center; justify-content: center; }
+canvas { display: block; width: min(100vw, calc(100vh * var(--cw, 1280) / 720)); height: auto; aspect-ratio: var(--cw, 1280) / 720; background: #000; }
+@supports (height: 100dvh) { canvas { width: min(100vw, calc(100dvh * var(--cw, 1280) / 720)); } }

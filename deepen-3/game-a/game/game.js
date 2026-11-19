@@ -393,7 +393,7 @@ function gain(kind, base, src, x, y, dy) {
 function addPoof(x, y, big) { R.poofs.push({ x: x, y: y, t: 0, big: !!big }); }
 function pushNotice(type) { R.noticeQ.push(type); }
 function killMon(m) {
-  m.alive = false; addPoof(m.x, m.y, m.type === 'mother');
+  m.alive = false; m.fl = null; if (m.state === 'aim') m.state = 'fly'; addPoof(m.x, m.y, m.type === 'mother');
   var drops = MDEF[m.type].drops.slice();
   if (m.brood) drops.push(['soul', 1]);
   drops.forEach(function (d, i) { gain(d[0], d[1], 'kill', m.x, m.y, i * 18); });
@@ -606,6 +606,7 @@ function stepFling(m) {
 var FROG_V0 = Math.sqrt(2 * GRAV * 80), FROG_VX = 120 / (2 * FROG_V0 / GRAV);
 function stepMon(m) {
   var p = R.p;
+  if (!m.alive) return; // 規則 34: 被擊倒立即停止一切行動(含射手蜂瞄準中的那一發)
   m.hitT = Math.max(0, m.hitT - DT); m.blockT = Math.max(0, m.blockT - DT); m.anim += DT;
   if (m.fl) { stepFling(m); return; }
   if (m.type === 'bee') { stepBee(m); return; }

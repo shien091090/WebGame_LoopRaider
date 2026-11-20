@@ -9,7 +9,8 @@ var PW = 28, PH = 36;
 var Placeholder = {};
 
 // ---------------------------------------------------------------- 常數資料
-var ITEM_NAMES = { bagWood: '木材袋', bagStone: '石頭袋', bagCrystal: '水晶袋', coreLamp: '魔核燈', glove: '拾荒手套', horn: '獵人號角', heart: '巢母之心', gear: '加速齒輪' };
+// 裝置代碼沿用舊道具代碼; 倉庫清單固定順序(疾時 / 聚木 / 聚石 / 聚晶 / 聚核 / 拾遺 / 驅獸 / 巢心)
+var DEV_ORDER = ['gear', 'bagWood', 'bagStone', 'bagCrystal', 'coreLamp', 'glove', 'horn', 'heart'];
 var SHOP = [
   { type: 'gear', cost: 12, max: 4 }, { type: 'bagWood', cost: 10, max: 2 }, { type: 'bagStone', cost: 10, max: 2 },
   { type: 'coreLamp', cost: 14, max: 2 }, { type: 'glove', cost: 18, max: 1 }, { type: 'horn', cost: 24, max: 1 }
@@ -17,8 +18,8 @@ var SHOP = [
 var SITE_COST = [[6, 10, 14], [16, 24, 32], [16, 24, 36], [30, 40, 50], [30, 40, 55], [40, 55, 70], [40, 55, 70], [0, 0, 0]];
 var UNLOCK_COST = [0, 20, 20, 50, 50, 50, 50, 0];
 var PARENTS = [[], [0], [0], [1], [1], [2], [2], [3, 4, 5, 6]];
-var CARD_POS = [[40, 281], [290, 131], [290, 431], [540, 56], [540, 206], [540, 356], [540, 506], [790, 281]];
-var WORK_POS = [40, 506];
+// 關卡卡片 0~7; 營地建築卡 8 = 升級所、9 = 商店
+var CARD_POS = [[392, 281], [616, 131], [616, 431], [840, 56], [840, 206], [840, 356], [840, 506], [1064, 281], [62, 150], [62, 430]];
 var UP_SPEED = [1, 1.08, 1.16, 1.24], UP_CD = [1, 0.85, 0.7, 0.55], UP_HP = [3, 4, 5];
 var SPEED_COST = [8, 20, 45], HP_COST = [12, 35], CD_COST = [8, 20, 45], ATK_COST = [15, 40];
 var RECRUIT_COST = 30;
@@ -247,7 +248,6 @@ function zOk(z, rep) { if (z === -1) return true; if (z <= -2) return !rep[-2 - 
 var G = null, R = null, SOL = null;
 var keys = { left: false, right: false, up: false };
 var edge = { z: false, x: false, down: false, jump: false, jumpRel: false };
-var LOG = [], LOGSTART = '';
 function isTouch() { return !!(window.PVDX && window.PVDX.on); }
 function snd(name) { if (!name) return; try { if (window.Sound && Sound.play) Sound.play(name); } catch (e) { if (window.console) console.error(e); } }
 var sndThrottle = {};
@@ -266,30 +266,37 @@ function newGame() {
     opened: [true, false, false, false, false, false, false, false],
     rec: z8(null), repaired: z8(function () { return [false, false, false]; }), repT: z8(function () { return [-99, -99, -99]; }),
     recruited: { sword: true, hunter: false, bomber: false },
-    lastCls: z8(null), bag: [], slots: z8(function () { return [null, null]; }), itemSeq: 0,
-    up: { speed: 0, hp: 0, cd: 0, atk: 0 }, chestTaken: z8(false), heartTaken: z8(false), repairVer: z8(0), attempts: z8(0),
-    shopLeft: SHOP.map(function (s) { return s.max; }),
+    // 裝置倉庫 = 每種擁有座數(owned) − 已安裝座數; slots[l][i] 是裝置代碼或 null
+    lastCls: z8(null), owned: {}, slots: z8(function () { return [null, null]; }),
+    up: { speed: 0, hp: 0, cd: 0, atk: 0 }, chestTaken: z8(false), heartTaken: z8(false), repairVer: z8(0),
+    shopLeft: SHOP.map(function (s) { return s.max; }), shopSel: 0, unlockFx: null,
     mapSel: 0, panel: null, upRow: 0, upSel: 0,
     bump: { wood: 1, stone: 1, crystal: 1, core: 1 }, flights: [],
     rp: z8(function () { return { pos: 0, cursor: 0 }; }),
     res: null, pendingRec: null, resLevel: -1,
     lockT: 0, lockFn: null, clearedAny: false, bossBeaten: false, ending: null, kills: 0,
     tot: { run: zeros(), replay: zeros(), clearBonus: zeros() },
-    spent: { unlock: 0, recruit: 0, repair: 0, shop: 0, upgrade: 0 },
-    levelStat: z8(function () { return { firstClearT: null, clears: 0, fails: 0, quits: 0, bestRunT: null, failSpots: [] }; }),
     musicNow: null, timers: [], muted: false, endTime: 0
   };
   R = null; SOL = null; thumbCache = {};
-  LOG = []; LOGSTART = new Date().toISOString();
   tutReset();
 }
 
 function maxHp() { return UP_HP[G.up.hp]; }
 function itemCount(l, type) {
   var n = 0;
-  G.slots[l].forEach(function (it) { if (it && it.type === type) n++; });
+  G.slots[l].forEach(function (it) { if (it === type) n++; });
   return n;
 }
+function installedCount(type) {
+  var n = 0;
+  G.slots.forEach(function (s) { s.forEach(function (it) { if (it === type) n++; }); });
+  return n;
+}
+// 倉庫裡還沒安裝的座數
+function storeOf(type) { return (G.owned[type] || 0) - installedCount(type); }
+function storeTotal() { var n = 0; DEV_ORDER.forEach(function (t) { n += storeOf(t); }); return n; }
+function addOwned(type) { G.owned[type] = (G.owned[type] || 0) + 1; }
 // 即時入帳與回放重算共用同一個加成函式
 function amountFor(l, src, base) {
   if (src === 'pick') return base + itemCount(l, 'glove');
@@ -317,39 +324,6 @@ function totalRates() {
   return t;
 }
 
-// ---------------------------------------------------------------- 埋點
-function emit(type, d) {
-  var e = { type: type, t: r1(G.gt) };
-  if (d) for (var k in d) e[k] = d[k];
-  LOG.push(e);
-}
-function buildSummary() {
-  var levels = [], i;
-  for (i = 0; i < 8; i++) {
-    var s = G.levelStat[i];
-    levels.push({ level: i + 1, firstClearT: s.firstClearT, clears: s.clears, fails: s.fails, quits: s.quits, bestRunT: s.bestRunT, failSpots: s.failSpots.slice() });
-  }
-  var tmap = {}, tut = [];
-  LOG.forEach(function (e) {
-    if (e.type === 'tutorial_show') { tmap[e.stage] = tmap[e.stage] || { stage: e.stage, shownT: null, doneT: null }; if (tmap[e.stage].shownT === null) tmap[e.stage].shownT = e.t; }
-    if (e.type === 'tutorial_done') { tmap[e.stage] = tmap[e.stage] || { stage: e.stage, shownT: null, doneT: null }; tmap[e.stage].doneT = e.t; }
-  });
-  TUT_IDS.forEach(function (id) { tut.push(tmap[id] || { stage: id, shownT: null, doneT: null }); });
-  return { levels: levels, tutorial: tut, totals: { run: G.tot.run, replay: G.tot.replay, clearBonus: G.tot.clearBonus }, spent: G.spent, kills: G.kills, totalTime: r1(G.gt) };
-}
-function pad2(n) { return (n < 10 ? '0' : '') + n; }
-function downloadLog() {
-  try {
-    var d = new Date();
-    var name = 'gamelog-WebGame_LoopRaider-' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + '-' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) + '.json';
-    var data = { game: 'WebGame_LoopRaider', version: 'polish-1', startedAt: LOGSTART, events: LOG, summary: buildSummary() };
-    var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = name;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  } catch (err) { if (window.console) console.error(err); }
-}
-
 // ---------------------------------------------------------------- 新手教學
 var TUT_IDS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '13b', '13c', '14', '15'];
 var T = null;
@@ -366,8 +340,8 @@ function tutScene(id) {
     case '3': case '4': case '5': case '13': case '13b': case '13c': case '14': case '15': return sc === 'play' && R && R.state === 'run';
     case '7': return sc === 'map';
     case '8': return sc === 'levelPanel' && !P.sub;
-    case '9': return sc === 'levelPanel' && (!P.sub || P.sub === 'bag');
-    case '10': return sc === 'levelPanel' && (!P.sub || P.sub === 'shop');
+    case '9': return sc === 'levelPanel' && (!P.sub || P.sub === 'dev');
+    case '10': return sc === 'map' || sc === 'shop';
     case '11': return sc === 'map' || sc === 'upgrade';
     case '12': return sc === 'levelPanel' && P.sub === 'class';
   }
@@ -395,8 +369,8 @@ function tutAppear(id) {
     case '7': ok = G.clearedAny; break;
     case '8': ok = !!T.want['8']; break;
     case '9': ok = !!T.want['9']; break;
-    case '10': ok = !!T.want['10']; break;
-    case '11': ok = G.stock.core >= 8 || G.stock.wood >= 30; break;
+    case '10': ok = G.screen === 'map' && shopAffordable(); break;
+    case '11': ok = G.screen === 'map' && anyAffordable(); break;
     case '12': ok = true; break;
     case '13': ok = !!T.want['13'] && !!T.done['3']; break;
     case '13b': ok = !!T.want['13b'] && !!T.done['3']; break;
@@ -415,7 +389,6 @@ function shieldNear() {
 function tutDone(id) {
   if (T.done[id]) return;
   T.done[id] = true;
-  emit('tutorial_done', { stage: id });
   if (T.cur === id) { T.effId = id; T.effT = 0; snd('tutorial_done'); }
   if (id === '13b') T.want['13c'] = true;
 }
@@ -442,7 +415,7 @@ function tutStep(dt) {
   }
   if (best) {
     T.cur = best;
-    if (!T.shown[best]) { T.shown[best] = true; emit('tutorial_show', { stage: best }); }
+    T.shown[best] = true;
   }
 }
 function keyLabel(k) { return k; }
@@ -460,8 +433,8 @@ function tutView() {
   function banner(x, y, w, h) { s.bx = x; s.by = y; s.bw = w; s.bh = h; }
   function txt1(a) { s.text = a[0]; s.keys = a[1].slice(); }
   switch (id) {
-    case '1': txt1(STAGE_TEXT['1']); banner(340, 648, 600, 40); s.tip = { x: 128, y: 277, dir: 'down' }; break;
-    case '2': txt1(STAGE_TEXT['2']); banner(60, 598, 640, 48); s.tip = { x: 716, y: 576, dir: 'right' }; break;
+    case '1': txt1(STAGE_TEXT['1']); banner(440, 648, 600, 40); s.tip = { x: 480, y: 277, dir: 'down' }; break;
+    case '2': txt1(STAGE_TEXT['2']); banner(60, 598, 640, 48); s.tip = { x: 716, y: 501, dir: 'right' }; break;
     case '3':
       txt1(STAGE_TEXT['3']); banner(340, 46, 600, 48);
       s.pressed = [T.pressed.left, T.pressed.right, T.pressed.up]; break;
@@ -474,30 +447,30 @@ function tutView() {
       s.text = R.cls === 'sword' ? '按 X 衝刺斬' : (R.cls === 'hunter' ? '按 X 潛行' : '按 X 震波'); s.keys = ['x'];
       banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 18 - 6, dir: 'down' }; break;
     case '7':
-      banner(340, 648, 600, 40);
-      if (G.stock.wood >= 20) { s.text = '木材夠了, 按 Z 解鎖新關卡'; s.keys = ['z']; s.tip = { x: 378, y: 127, dir: 'down' }; }
-      else { s.text = '過關的關卡會一直重播賺素材'; s.keys = []; s.tip = { x: 128, y: 277, dir: 'down' }; }
+      banner(440, 648, 600, 40);
+      if (G.stock.wood >= 20) { s.text = '木材夠了, 按 Z 解鎖新關卡'; s.keys = ['z']; s.tip = { x: 704, y: 127, dir: 'down' }; }
+      else { s.text = '過關的關卡會一直重播賺素材'; s.keys = []; s.tip = { x: 480, y: 277, dir: 'down' }; }
       break;
     case '8':
       txt1(STAGE_TEXT['8']); banner(60, 598, 640, 48);
       s.tip = { x: 803 + 158 * P.siteSel, y: 124, dir: 'down' }; break;
     case '9':
-      if (P.sub === 'bag') { s.text = '選道具按 Z 裝上'; s.keys = ['z']; banner(340, 612, 600, 48); s.tip = { x: 420, y: 196, dir: 'down' }; }
-      else { s.text = '選道具格按 Z'; s.keys = ['z']; banner(60, 598, 640, 48); s.tip = { x: 843, y: 306, dir: 'down' }; }
+      if (P.sub === 'dev') { s.text = '選一個按 Z 安裝'; s.keys = ['z']; banner(340, 612, 600, 48); s.tip = { x: 264, y: 236, dir: 'right' }; }
+      else { s.text = '選裝置格按 Z'; s.keys = ['z']; banner(60, 598, 640, 48); s.tip = { x: 843, y: 306, dir: 'down' }; }
       break;
     case '10':
-      if (P.sub === 'shop') {
+      if (G.screen === 'shop') {
         s.text = '選一樣按 Z 買下'; s.keys = ['z']; banner(340, 612, 600, 48);
-        var fi = -1; for (i = 0; i < 6; i++) if (G.shopLeft[i] > 0 && G.stock.crystal >= SHOP[i].cost) { fi = i; break; }
+        var fi = firstBuyableShopRow();
         if (fi >= 0) s.tip = { x: 268, y: 205 + 56 * fi, dir: 'right' };
-      } else { s.text = '水晶可以在商店買道具'; s.keys = ['z']; banner(60, 598, 640, 48); s.tip = { x: 716, y: 461, dir: 'right' }; }
+      } else { s.text = '水晶可以在商店買裝置'; s.keys = ['z']; banner(440, 648, 600, 40); s.tip = { x: 150, y: 426, dir: 'down' }; }
       break;
     case '11':
       if (G.screen === 'upgrade') {
-        s.text = '按 Z 招募或強化'; s.keys = ['z']; banner(340, 622, 600, 40);
+        s.text = '按 Z 解鎖職業或強化'; s.keys = ['z']; banner(340, 622, 600, 40);
         var ry = firstAffordableUpRow();
         if (ry >= 0) s.tip = { x: 76, y: [175, 304, 394, 484, 574][ry], dir: 'right' };
-      } else { s.text = '按 Z 進升級所'; s.keys = ['z']; banner(340, 648, 600, 40); s.tip = { x: 128, y: 502, dir: 'down' }; }
+      } else { s.text = '按 Z 進升級所'; s.keys = ['z']; banner(440, 648, 600, 40); s.tip = { x: 150, y: 146, dir: 'down' }; }
       break;
     case '12': txt1(STAGE_TEXT['12']); banner(340, 532, 600, 48); s.tip = { x: 416 + 224 * P.clsSel, y: 246, dir: 'down' }; break;
     case '13': s.text = '自動射箭, 按 X 潛行穿過怪物'; s.keys = ['x']; banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 24, dir: 'down' }; break;
@@ -595,12 +568,12 @@ function newMon(d) {
 function monName(m) { return m.type === 'mother' ? 'mother_' + m.mk : m.type; }
 function startRun(l, cls) {
   var L = LEVELS[l], rep = G.repaired[l];
-  G.lastCls[l] = cls; G.attempts[l]++;
+  G.lastCls[l] = cls;
   SOL = makeSolid(L, rep);
   L.cracks.forEach(function (q) { SOL[q[1]][q[0]] = 1; });
   var hp = maxHp();
   R = {
-    l: l, cls: cls, L: L, rep: rep.slice(), f: 0, state: 'run', cheerT: 0, atkId: 0,
+    l: l, cls: cls, L: L, rep: rep.slice(), f: 0, state: 'run', cT: 0, deadT: 0, dead: null, focus: null, irisSnd: false, shatterDone: false, atkId: 0,
     p: { x: L.start.x, y: L.start.y, w: PW, h: PH, vx: 0, vy: 0, facing: 1, onGround: false, hp: hp, inv: 0, kb: 0, kbDir: 0, kbSpd: 80 / 0.15, hurtT: 0,
       pose: 'idle', poseT: 0, actPose: null, actT: 0, dashT: 0, dashUsed: false, dashHit: {}, dashCr: {}, atkCd: 0, skCd: 0, skDur: 1.2,
       stealth: false, stealthT: 2.5, unT: 0.3, autoCd: 0.3, coyote: 0, jumpBuf: 0, jumpT: 99, readyT: 0.5, castT: 0.3, denyT: 0.25, prevCd: 0, skKill: false, fallV: 0 },
@@ -634,8 +607,6 @@ function startRun(l, cls) {
   R.frames.push(snap());
   G.screen = 'play'; G.paused = false;
   clearKeys();
-  emit('level_enter', { level: l + 1, cls: cls, attempt: G.attempts[l], repaired: rep.slice(), slots: G.slots[l].map(function (it) { return it ? it.type : null; }),
-    upgrades: { speed: G.up.speed, hp: G.up.hp, cd: G.up.cd, atk: G.up.atk } });
   if (cls === 'hunter' && !T.done['13']) T.want['13'] = true;
   if (cls === 'bomber' && !T.done['13b']) T.want['13b'] = true;
   setMusic(MUSIC_OF[L.theme]);
@@ -772,21 +743,19 @@ function hitCrack(i, n) {
   var q = R.L.cracks[i];
   if (R.crHp[i] <= 0) { SOL[q[1]][q[0]] = 0; addPoof(q[0] * TS + 20, q[1] * TS + 20); }
 }
-function hurtPlayer(fromX, by, opt) {
+function hurtPlayer(fromX, by, opt, fromY) {
   var p = R.p;
   if (R.state !== 'run' || p.inv > 0 || p.dashT > 0 || p.stealth) return;
   p.hp -= 1; p.inv = 1; p.hurtT = 0.25; R.hurtBy = by;
   if (opt && opt.butt) { p.kb = 0.3; p.kbDir = opt.butt; p.kbSpd = 240 / 0.3; p.vy = -300; p.onGround = false; }
   else { p.kb = 0.15; p.kbDir = (p.x - fromX) >= 0 ? 1 : -1; p.kbSpd = 80 / 0.15; }
-  emit('hurt', { level: R.l + 1, runT: r1(R.f / 60), x: Math.round(p.x), y: Math.round(p.y), by: by });
-  if (p.hp <= 0) failRun(by); else snd('player_hurt');
+  if (p.hp <= 0) failRun(by, fromX, fromY === undefined || fromY === null ? p.y : fromY); else snd('player_hurt');
 }
-function hurtSpike() {
+function hurtSpike(hitX, hitY) {
   var p = R.p;
   if (R.state !== 'run' || p.inv > 0 || p.dashT > 0) return;
   p.hp -= 1; p.inv = 1; p.kb = 0; p.vx = 0; p.vy = -520; p.hurtT = 0.25; p.onGround = false; p.coyote = 0; R.hurtBy = 'spike';
-  emit('hurt', { level: R.l + 1, runT: r1(R.f / 60), x: Math.round(p.x), y: Math.round(p.y), by: 'spike' });
-  if (p.hp <= 0) failRun('spike'); else snd('player_hurt');
+  if (p.hp <= 0) failRun('spike', hitX, hitY); else snd('player_hurt');
 }
 function boom(x, y, atk, r, dmg, pl, kind) {
   R.expl.push({ x: x, y: y, t: 0, dur: 0.4, r: r, kind: kind });
@@ -795,20 +764,21 @@ function boom(x, y, atk, r, dmg, pl, kind) {
   R.L.cracks.forEach(function (q, i) { if (kind === 'bomb' && R.crHp[i] > 0 && circleCell(x, y, r, q[0], q[1])) hitCrack(i, 3); });
   if (kind === 'bomb' && R.boss) bossHitTest(function (b) { return circleBox(x, y, r, b); }, dmg);
 }
-function failRun(by) {
+// 死亡動畫(1.3 秒, 世界定格、不接輸入), 播完才出失敗面板; 這趟作廢(不存回放、素材與裝置不入帳)
+var DEATH_DUR = 1.3;
+function failRun(by, hx, hy) {
   if (R.state === 'fail') return;
-  R.state = 'fail'; G.screen = 'fail';
   var p = R.p;
-  G.levelStat[R.l].fails++;
-  var cause = (by === 'fall') ? 'fall' : 'hp';
-  G.levelStat[R.l].failSpots.push({ x: Math.round(p.x), y: Math.round(p.y), by: by });
-  emit('level_fail', { level: R.l + 1, cls: R.cls, runT: r1(R.f / 60), cause: cause, x: Math.round(p.x), y: Math.round(p.y), by: by });
-  snd('level_fail');
+  R.state = 'fail'; R.deadT = 0; R.shatterDone = false;
+  R.dead = { x: Math.max(p.w / 2, Math.min(W - p.w / 2, p.x)), y: by === 'fall' ? 702 : p.y, facing: p.facing, hitX: hx, hitY: hy };
+  R.lastSnap = snap();
+  clearKeys();
+  snd('player_death');
 }
 
 // ---------------------------------------------------------------- 玩家
 function stepPlayer() {
-  var p = R.p, cls = R.cls, spd = CLS[cls].speed * UP_SPEED[G.up.speed], cheer = R.state === 'cheer';
+  var p = R.p, cls = R.cls, spd = CLS[cls].speed * UP_SPEED[G.up.speed];
   p.atkCd = Math.max(0, p.atkCd - DT);
   if (p.stealth) {
     p.stealthT += DT;
@@ -820,14 +790,12 @@ function stepPlayer() {
   p.inv = Math.max(0, p.inv - DT); p.hurtT = Math.max(0, p.hurtT - DT);
   if (p.actT > 0) { p.actT -= DT; if (p.actT <= 0) p.actPose = null; }
   p.jumpT += DT;
-  if (edge.jump && !cheer) p.jumpBuf = 0.1; else p.jumpBuf = Math.max(0, p.jumpBuf - DT);
+  if (edge.jump) p.jumpBuf = 0.1; else p.jumpBuf = Math.max(0, p.jumpBuf - DT);
   p.coyote = p.onGround ? 0.08 : Math.max(0, p.coyote - DT);
   p.skKill = false;
-  if (!cheer) {
-    if (edge.z) doAttack();
-    if (edge.x) doSkill();
-  }
-  var dir = cheer ? 0 : (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+  if (edge.z) doAttack();
+  if (edge.x) doSkill();
+  var dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
   if (p.dashT > 0) {
     p.dashT -= DT;
     var hit = moveX(p, p.facing * (160 / 0.18) * DT);
@@ -863,7 +831,7 @@ function stepPlayer() {
   }
   p.x = Math.max(p.w / 2, Math.min(W - p.w / 2, p.x));
 
-  if (cls === 'hunter' && !p.stealth && !cheer) {
+  if (cls === 'hunter' && !p.stealth) {
     p.autoCd -= DT;
     if (p.autoCd <= 0) {
       var best = null, bd = 260.01;
@@ -874,8 +842,7 @@ function stepPlayer() {
     }
   }
   var pose;
-  if (cheer) pose = 'cheer';
-  else if (p.hurtT > 0) pose = 'hurt';
+  if (p.hurtT > 0) pose = 'hurt';
   else if (p.actT > 0 && p.actPose) pose = p.actPose;
   else if (p.dashT > 0) pose = 'dash';
   else if (!p.onGround) pose = p.vy < 0 ? 'rise' : 'fall';
@@ -959,7 +926,7 @@ function beetleBlast(m, killed) {
   R.expl.push({ x: m.x, y: m.y, t: 0, dur: 0.4, r: 70, kind: 'beetle' });
   snd('explosion');
   var p = R.p;
-  if (circleBox(m.x, m.y, 70, { x: p.x, y: p.y, w: p.w, h: p.h })) hurtPlayer(m.x, 'beetle');
+  if (circleBox(m.x, m.y, 70, { x: p.x, y: p.y, w: p.w, h: p.h })) hurtPlayer(m.x, 'beetle', null, m.y);
   R.mons.forEach(function (o) { if (o !== m && o.alive && circleBox(m.x, m.y, 70, o)) dmgMon(o, 2, { kind: 'beetle', fx: m.x, cy: m.y, atk: m.atk }); });
 }
 function stepFling(m) {
@@ -1031,7 +998,7 @@ function stepMon(m) {
       } else if (m.state === 'windup') { m.t -= DT; if (m.t <= 0) setSt(m, 'whip', 0.3); }
       else if (m.state === 'whip') {
         var zx = m.facing > 0 ? m.x + 20 : m.x - 20 - 140, gy = m.y + m.h / 2;
-        if (ovl(zx + 70, gy - 20, 140, 40, p.x, p.y, p.w, p.h)) hurtPlayer(m.x, 'thorn');
+        if (ovl(zx + 70, gy - 20, 140, 40, p.x, p.y, p.w, p.h)) hurtPlayer(m.x, 'thorn', null, m.y);
         m.t -= DT; if (m.t <= 0) setSt(m, 'recover', 1.2);
       } else { m.t -= DT; if (m.t <= 0) setSt(m, 'idle', 0); }
       break;
@@ -1258,7 +1225,6 @@ function bossTrans() {
   var B = R.boss;
   B.weak = null; B.weakId = null; B.lf.stuck = false; B.rf.stuck = false; B.steam = 0; B.eye = 0; B.beamOn = false; R.beam = null;
   bossSt(B, 'transRise', 0.6); B.next = B.phase + 1; B.rockI = 0;
-  emit('boss_phase', { runT: r1(R.f / 60), phase: B.next });
   snd('boss_phase');
 }
 function bossKo() {
@@ -1267,7 +1233,6 @@ function bossKo() {
   gain('core', 10, 'kill', B.hx, B.hy);
   addPoof(640, 300, 'huge');
   R.kills++;
-  emit('boss_phase', { runT: r1(R.f / 60), phase: 'ko' });
   snd('boss_down');
 }
 function bossTop(x) { return groundTopFrom(x, 40); }
@@ -1309,7 +1274,7 @@ function stepBoss() {
       F = B.F;
       B.t -= DT; u = 1 - Math.max(0, B.t) / 0.12;
       F.y = B.y0 + (B.landY - 50 - B.y0) * u;
-      if (ovl(F.x, F.y, 110, 100, p.x, p.y, p.w, p.h)) hurtPlayer(F.x, 'boss_fist');
+      if (ovl(F.x, F.y, 110, 100, p.x, p.y, p.w, p.h)) hurtPlayer(F.x, 'boss_fist', null, F.y);
       if (B.t <= 0) {
         F.y = B.landY - 40; F.stuck = true; B.weak = 'fist'; B.weakId = F === B.lf ? 'fistL' : 'fistR';
         bossSt(B, 'slamStuck', 3.0); snd('boss_slam'); snd('boss_weak'); R.shake = 0.12; T.want['15'] = true;
@@ -1364,7 +1329,7 @@ function stepBoss() {
         if (el >= 0 && el < 0.15) {
           if (!b.started) { b.started = true; snd('boss_rock'); }
           b.falling = true; b.y = 150 + (b.land - 30 - 150) * (el / 0.15);
-          if (ovl(b.x, b.y, 100, 60, p.x, p.y, p.w, p.h)) hurtPlayer(b.x, 'boss_rock');
+          if (ovl(b.x, b.y, 100, 60, p.x, p.y, p.w, p.h)) hurtPlayer(b.x, 'boss_rock', null, b.y);
         } else if (el >= 0.15 && b.show) {
           b.show = false; b.falling = false; addPoof(b.x, b.land - 20, 'small'); R.shake = 0.12;
         }
@@ -1422,7 +1387,7 @@ function beamHurt(b) {
   var p = R.p, d = Math.hypot(b.x2 - b.x1, b.y2 - b.y1), n = Math.ceil(d / 8), i;
   for (i = 0; i <= n; i++) {
     var qx = b.x1 + (b.x2 - b.x1) * i / n, qy = b.y1 + (b.y2 - b.y1) * i / n;
-    if (Math.abs(qx - p.x) < p.w / 2 + 24 && Math.abs(qy - p.y) < p.h / 2 + 24) { hurtPlayer(qx, 'boss_beam'); return; }
+    if (Math.abs(qx - p.x) < p.w / 2 + 24 && Math.abs(qy - p.y) < p.h / 2 + 24) { hurtPlayer(qx, 'boss_beam', null, qy); return; }
   }
 }
 
@@ -1472,13 +1437,13 @@ function stepProj() {
     var s = R.shots[i];
     s.x += s.vx * DT; s.y += s.vy * DT; s.life -= DT;
     if (s.life <= 0 || isSol(SOL, Math.floor(s.x / TS), Math.floor(s.y / TS)) || s.x < 0 || s.x > W || s.y > H + 40) { R.shots.splice(i, 1); continue; }
-    if (ovl(s.x, s.y, 12, 12, p.x, p.y, p.w, p.h)) { hurtPlayer(s.x, 'bee'); R.shots.splice(i, 1); }
+    if (ovl(s.x, s.y, 12, 12, p.x, p.y, p.w, p.h)) { hurtPlayer(s.x, 'bee', null, s.y); R.shots.splice(i, 1); }
   }
   for (i = R.rocks.length - 1; i >= 0; i--) {
     var rk = R.rocks[i];
     rk.t += DT; rk.vy += rk.g * DT; rk.x += rk.vx * DT; rk.y += rk.vy * DT;
     if (isSol(SOL, Math.floor(rk.x / TS), Math.floor(rk.y / TS)) || rk.x < 0 || rk.x > W || rk.y > H + 40) { addPoof(rk.x, rk.y, 'small'); R.rocks.splice(i, 1); continue; }
-    if (ovl(rk.x, rk.y, 20, 20, p.x, p.y, p.w, p.h)) { hurtPlayer(rk.x, rk.kind === 'lizard' ? 'lizard' : 'mother_cliff'); addPoof(rk.x, rk.y, 'small'); R.rocks.splice(i, 1); }
+    if (ovl(rk.x, rk.y, 20, 20, p.x, p.y, p.w, p.h)) { hurtPlayer(rk.x, rk.kind === 'lizard' ? 'lizard' : 'mother_cliff', null, rk.y); addPoof(rk.x, rk.y, 'small'); R.rocks.splice(i, 1); }
   }
 }
 
@@ -1573,8 +1538,8 @@ function stepRun() {
       if (m.type === 'mother' && (m.state === 'under' || m.state === 'burrow')) return;
       if (m.type === 'mother' && m.state === 'erupt' && Math.abs(p.x - m.x) > 40) return;
       if (ovl(p.x, p.y, p.w, p.h, m.x, m.y, m.w, m.h)) {
-        if (m.type === 'ram' && m.state === 'butt') hurtPlayer(m.x, 'ram', { butt: m.facing });
-        else hurtPlayer(m.x, monName(m));
+        if (m.type === 'ram' && m.state === 'butt') hurtPlayer(m.x, 'ram', { butt: m.facing }, m.y);
+        else hurtPlayer(m.x, monName(m), null, m.y);
       }
     });
   }
@@ -1590,7 +1555,7 @@ function stepRun() {
   if (rec) {
     for (i = 0; i < R.L.spikes.length; i++) {
       var sp = R.L.spikes[i];
-      if (ovl(p.x, p.y, p.w, p.h, sp[0] * TS + 20, sp[1] * TS + 30, 40, 20)) { hurtSpike(); break; }
+      if (ovl(p.x, p.y, p.w, p.h, sp[0] * TS + 20, sp[1] * TS + 30, 40, 20)) { hurtSpike(sp[0] * TS + 20, sp[1] * TS + 30); break; }
     }
   }
   if (R.state === 'fail') return;
@@ -1601,27 +1566,34 @@ function stepRun() {
   R.shake = Math.max(0, R.shake - DT);
   if (R.notice) { R.notice.t += DT; if (R.notice.t >= 1.5) R.notice = null; }
   if (!R.notice && R.noticeQ.length) { R.notice = { type: R.noticeQ.shift(), t: 0 }; snd('item_get'); }
-  if (p.y - p.h / 2 > H + 20) { failRun('fall'); return; }
+  if (p.y - p.h / 2 > H + 20) { failRun('fall', p.x, 702); return; }
   var g = R.L.goal, gActive = !g.hidden || R.goalFall >= 0.5;
   var at = gActive && rec && ovl(p.x, p.y, p.w, p.h, g.x, g.y, 40, 80);
-  if (at && !R.atGoal) { snd('goal_reach'); if (!T.shown['6'] && !T.done['6']) { T.shown['6'] = true; emit('tutorial_show', { stage: '6' }); } }
+  if (at && !R.atGoal) { snd('goal_reach'); if (!T.done['6']) T.shown['6'] = true; }
   R.atGoal = at;
   if (rec) {
     R.frames.push(snap());
     if (at && edge.down) finishRun();
-  } else if (R.state === 'cheer') {
-    R.cheerT += DT;
-    if (R.cheerT >= 0.6) winRun();
   }
 }
+// 過關動畫(1.4 秒): 按 ↓ 那一刻錄影結束、世界定格; 第一次過關先有 0.6 秒教學完成特效(cT 從 -0.6 走到 0)
+var CLEAR_DUR = 1.4;
 function finishRun() {
-  R.state = 'cheer'; R.cheerT = 0; R.atGoal = true;
+  var g = R.L.goal, p = R.p;
+  R.state = 'clear'; R.atGoal = true; R.irisSnd = false;
+  R.cT = T.done['6'] ? 0 : -0.6;
+  R.focus = { x: (p.x + g.x) / 2, y: (p.y + g.y) / 2 };
+  R.lastSnap = R.frames[R.frames.length - 1];
   clearKeys();
-  var cb = clearBonus(R.l), gn = zeros();
-  KINDS.forEach(function (k) { gn[k] = R.run[k] + cb[k]; });
-  emit('level_clear', { level: R.l + 1, cls: R.cls, runT: r1(R.f / 60), gain: gn, kills: R.kills, items: R.gotItems.slice(), hp: R.p.hp });
   snd('level_clear');
-  if (!T.done['6']) { T.done['6'] = true; T.g6 = 0; emit('tutorial_done', { stage: '6' }); }
+  if (!T.done['6']) { T.done['6'] = true; snd('tutorial_done'); }
+}
+// 世界放大倍率: 0.08~0.72 秒由 1 推到 1.7(先慢後快再慢), 之後保持
+function clearZoom(t) {
+  if (t <= 0.08) return 1;
+  if (t >= 0.72) return 1.7;
+  var u = (t - 0.08) / 0.64;
+  return 1 + 0.7 * u * u * (3 - 2 * u);
 }
 
 // ---------------------------------------------------------------- 過關結算
@@ -1633,25 +1605,24 @@ function winRun() {
     marks: R.events.slice(0, 60).map(function (e) { return { p: Math.min(1, e.f / Math.max(1, N)), kind: e.kind }; }) };
   var cb = clearBonus(l), run = {};
   KINDS.forEach(function (k) { G.tot.run[k] += R.run[k]; G.tot.clearBonus[k] += cb[k]; run[k] = R.run[k] + cb[k]; addStock(k, run[k]); });
+  rec.run = run;
   G.kills += R.kills;
   R.gotItems.forEach(function (t) {
-    G.bag.push({ type: t, where: null, id: ++G.itemSeq });
+    addOwned(t);
     if (t === 'heart') G.heartTaken[l] = true; else G.chestTaken[l] = true;
   });
-  var st = G.levelStat[l], rt = r1(N / 60);
-  st.clears++; if (st.firstClearT === null) st.firstClearT = r1(G.gt);
-  if (st.bestRunT === null || rt < st.bestRunT) st.bestRunT = rt;
+  var rt = r1(N / 60);
   G.clearedAny = true;
   var old = G.rec[l], first8 = (l === 7 && !G.bossBeaten);
-  G.res = { time: rt, run: run, rates: null, cls: R.cls, items: R.gotItems.slice(), oldTime: null, oldRates: null, oldCls: null };
+  G.res = { time: rt, run: run, rates: null, cls: R.cls, items: R.gotItems.slice(), oldTime: null, oldRates: null, oldCls: null, oldRun: null };
   if (!old) { G.rec[l] = rec; G.rp[l] = { pos: 0, cursor: 0 }; G.pendingRec = null; }
-  else { G.pendingRec = rec; G.res.oldTime = r1(old.N / 60); G.res.oldRates = rateOf(l, old); G.res.oldCls = old.cls; }
+  else { G.pendingRec = rec; G.res.oldTime = r1(old.N / 60); G.res.oldRates = rateOf(l, old); G.res.oldCls = old.cls; G.res.oldRun = old.run; }
   G.res.rates = rateOf(l, rec);
   G.resLevel = l;
   checkBossOpen();
   if (first8) {
     G.bossBeaten = true; G.endTime = G.gt; G.rec[7] = rec; G.pendingRec = null; G.rp[7] = { pos: 0, cursor: 0 };
-    G.screen = 'ending'; G.ending = { t: 0, logged: false }; R = null; SOL = null; clearKeys();
+    G.screen = 'ending'; G.ending = { t: 0 }; R = null; SOL = null; clearKeys();
     return;
   }
   G.screen = 'result';
@@ -1738,14 +1709,33 @@ function anyAffordable() {
   for (var i = 0; i < 4; i++) { var c = statCost(i); if (c && canPay(c)) ok = true; }
   return ok;
 }
+// 兩個職業都已解鎖且四項強化全滿
+function allUpgraded() {
+  if (!G.recruited.hunter || !G.recruited.bomber) return false;
+  for (var i = 0; i < 4; i++) if (statCost(i)) return false;
+  return true;
+}
 function firstAffordableUpRow() {
   var r = -1;
   if (['hunter', 'bomber'].some(function (c) { return !G.recruited[c] && canPay(recruitCost()); })) return 0;
   for (var i = 0; i < 4; i++) { var c = statCost(i); if (c && canPay(c)) { r = i + 1; break; } }
   return r;
 }
-var MAP_COLS = [[0, 8], [1, 2], [3, 4, 5, 6], [7]];
-function cardCY(i) { return i < 8 ? CARD_POS[i][1] + 68 : WORK_POS[1] + 68; }
+// 商店: 最便宜的未售完裝置價格(全售完回 1e9)
+function shopMinCost() {
+  var m = 1e9;
+  SHOP.forEach(function (s, i) { if (G.shopLeft[i] > 0 && s.cost < m) m = s.cost; });
+  return m;
+}
+function shopAffordable() { return G.stock.crystal >= shopMinCost(); }
+function shopSoldOut() { return G.shopLeft.every(function (v) { return v <= 0; }); }
+function firstBuyableShopRow() {
+  for (var i = 0; i < SHOP.length; i++) if (G.shopLeft[i] > 0 && G.stock.crystal >= SHOP[i].cost) return i;
+  return -1;
+}
+// 欄由左到右: 營地(升級所、商店) / 第 1 關 / 第 2、3 關 / 第 4~7 關 / 第 8 關
+var MAP_COLS = [[8, 9], [0], [1, 2], [3, 4, 5, 6], [7]];
+function cardCY(i) { return CARD_POS[i][1] + 68; }
 function mapMove(dx, dy) {
   var s = G.mapSel, ci = 0, i, moved = false;
   MAP_COLS.forEach(function (col, k) { if (col.indexOf(s) >= 0) ci = k; });
@@ -1771,36 +1761,32 @@ function minSiteCost(l) {
 }
 function openPanel(l) {
   var ci = CLS_LIST.indexOf(G.lastCls[l]);
-  G.panel = { l: l, row: 3, clsSel: ci < 0 ? 0 : ci, siteSel: 0, slotSel: 0, sub: null, bagSel: 0, shopSel: 0, slotFor: 0 };
+  G.panel = { l: l, row: 2, clsSel: ci < 0 ? 0 : ci, siteSel: 0, slotSel: 0, sub: null, devSel: 0, slotFor: 0 };
   G.screen = 'levelPanel';
-  var m = minSiteCost(l), i;
+  var m = minSiteCost(l);
   if (!T.done['8'] && m <= G.stock.stone) {
     T.want['8'] = true; G.panel.row = 0;
     var bi = -1;
     LEVELS[l].sites.forEach(function (st, k) { if (!G.repaired[l][k] && st.cost === m && bi < 0) bi = k; });
     G.panel.siteSel = Math.max(0, bi);
   }
-  if (!T.done['9'] && G.bag.some(function (it) { return !it.where; })) T.want['9'] = true;
-  if (!T.done['10']) { var cm = 1e9; for (i = 0; i < 6; i++) if (G.shopLeft[i] > 0 && SHOP[i].cost < cm) cm = SHOP[i].cost; if (G.stock.crystal >= cm) T.want['10'] = true; }
+  if (!T.done['9'] && storeTotal() > 0) T.want['9'] = true;
 }
-function bagItem(sel) { return sel >= 1 ? G.bag[sel - 1] : null; }
-function equipItem(l, slot, it) {
-  var cur = G.slots[l][slot];
-  if (cur) cur.where = null;
-  G.slots[l][slot] = null;
-  if (it) {
-    if (it.where) G.slots[it.where.level][it.where.slot] = null;
-    G.slots[l][slot] = it; it.where = { level: l, slot: slot };
-  }
-  emit('equip', { level: l + 1, slot: slot + 1, item: it ? it.type : null });
+// 裝置倉庫清單(只含還沒安裝的種類, 固定順序)
+function devEntries() {
+  var out = [];
+  DEV_ORDER.forEach(function (t) { var n = storeOf(t); if (n > 0) out.push({ type: t, n: n }); });
+  return out;
+}
+function equipDev(l, slot, type) {
+  G.slots[l][slot] = type || null;
   snd('equip');
 }
 function doRepair(l, i) {
   var st = LEVELS[l].sites[i];
   if (G.repaired[l][i] || G.stock.stone < st.cost) { snd('ui_deny'); return; }
-  G.stock.stone -= st.cost; G.spent.repair += st.cost;
+  G.stock.stone -= st.cost;
   G.repaired[l][i] = true; G.repT[l][i] = G.t; G.repairVer[l]++;
-  emit('repair', { level: l + 1, site: i + 1, cost: costOf('stone', st.cost) });
   snd('repair');
   G.timers.push({ t: 0.6, fn: function () { snd('fog_clear'); } });
   tutDone('8');
@@ -1813,35 +1799,17 @@ function startChallenge() {
 }
 function panelKey(code) {
   var P = G.panel, l = P.l, L = LEVELS[l];
-  if (P.sub === 'bag') {
-    var n = Math.min(23, G.bag.length);
-    if (code === 'ArrowLeft') { if (P.bagSel > 0) { P.bagSel--; snd('ui_move'); } }
-    else if (code === 'ArrowRight') { if (P.bagSel < 23) { P.bagSel++; snd('ui_move'); } }
-    else if (code === 'ArrowUp') { if (P.bagSel >= 8) { P.bagSel -= 8; snd('ui_move'); } }
-    else if (code === 'ArrowDown') { if (P.bagSel + 8 <= 23) { P.bagSel += 8; snd('ui_move'); } }
+  if (P.sub === 'dev') {
+    var ent = devEntries(), cnt = ent.length + 1;
+    if (code === 'ArrowUp') { if (P.devSel > 0) { P.devSel--; snd('ui_move'); } }
+    else if (code === 'ArrowDown') { if (P.devSel < cnt - 1) { P.devSel++; snd('ui_move'); } }
     else if (code === 'KeyX') { P.sub = null; snd('ui_back'); }
     else if (code === 'KeyZ') {
-      var it = bagItem(P.bagSel);
-      if (P.bagSel === 0) { equipItem(l, P.slotFor, null); P.sub = null; }
-      else if (it) {
-        equipItem(l, P.slotFor, it);
+      if (P.devSel === 0) { equipDev(l, P.slotFor, null); P.sub = null; }
+      else if (ent[P.devSel - 1]) {
+        equipDev(l, P.slotFor, ent[P.devSel - 1].type);
         if (T.cur === '9') { tutDone('9'); lockFor(0.6, function () { if (G.panel) G.panel.sub = null; }); }
         else { tutDone('9'); P.sub = null; }
-      } else snd('ui_deny');
-    }
-    return;
-  }
-  if (P.sub === 'shop') {
-    if (code === 'ArrowUp') { if (P.shopSel > 0) { P.shopSel--; snd('ui_move'); } }
-    else if (code === 'ArrowDown') { if (P.shopSel < 5) { P.shopSel++; snd('ui_move'); } }
-    else if (code === 'KeyX') { P.sub = null; snd('ui_back'); }
-    else if (code === 'KeyZ') {
-      var i = P.shopSel, s = SHOP[i];
-      if (G.shopLeft[i] > 0 && G.stock.crystal >= s.cost && G.bag.length < 23) {
-        G.stock.crystal -= s.cost; G.spent.shop += s.cost; G.shopLeft[i]--;
-        G.bag.push({ type: s.type, where: null, id: ++G.itemSeq });
-        emit('buy_item', { item: s.type, cost: costOf('crystal', s.cost), left: G.shopLeft[i] });
-        snd('buy_item'); tutDone('10');
       } else snd('ui_deny');
     }
     return;
@@ -1860,7 +1828,7 @@ function panelKey(code) {
     return;
   }
   if (code === 'ArrowUp') { if (P.row > 0) { P.row--; snd('ui_move'); } }
-  else if (code === 'ArrowDown') { if (P.row < 3) { P.row++; snd('ui_move'); } }
+  else if (code === 'ArrowDown') { if (P.row < 2) { P.row++; snd('ui_move'); } }
   else if (code === 'ArrowLeft' || code === 'ArrowRight') {
     var d = code === 'ArrowLeft' ? -1 : 1;
     if (P.row === 0 && L.sites.length) { P.siteSel = Math.max(0, Math.min(2, P.siteSel + d)); snd('ui_move'); }
@@ -1869,9 +1837,9 @@ function panelKey(code) {
   else if (code === 'KeyZ') {
     if (P.row === 0) { if (L.sites.length) doRepair(l, P.siteSel); else snd('ui_deny'); }
     else if (P.row === 1) {
-      if (G.bag.length) { P.sub = 'bag'; P.slotFor = P.slotSel; P.bagSel = 1; snd('ui_confirm'); } else snd('ui_deny');
-    } else if (P.row === 2) { P.sub = 'shop'; P.shopSel = 0; snd('ui_confirm'); }
-    else {
+      // 倉庫沒有未安裝的裝置且這一格是空的 → 不反應
+      if (storeTotal() > 0 || G.slots[l][P.slotSel]) { P.sub = 'dev'; P.slotFor = P.slotSel; P.devSel = devEntries().length ? 1 : 0; snd('ui_confirm'); } else snd('ui_deny');
+    } else {
       snd('ui_confirm');
       if (T.cur === '2') { tutDone('2'); lockFor(0.6, startChallenge); } else { tutDone('2'); startChallenge(); }
     }
@@ -1879,8 +1847,7 @@ function panelKey(code) {
 }
 function doUnlock(l) {
   if (G.stock.wood < UNLOCK_COST[l]) { snd('ui_deny'); return; }
-  G.stock.wood -= UNLOCK_COST[l]; G.spent.unlock += UNLOCK_COST[l]; G.opened[l] = true;
-  emit('unlock_level', { level: l + 1, cost: costOf('wood', UNLOCK_COST[l]) });
+  G.stock.wood -= UNLOCK_COST[l]; G.opened[l] = true;
   snd('unlock_level'); tutDone('7');
 }
 function mapZ() {
@@ -1894,7 +1861,20 @@ function mapZ() {
       if (s === 0 && T.cur === '1') { tutDone('1'); lockFor(0.6, function () { openPanel(0); }); }
       else openPanel(s);
     }
-  } else { G.screen = 'upgrade'; G.upRow = 0; G.upSel = 0; snd('ui_confirm'); }
+  } else if (s === 8) { G.screen = 'upgrade'; G.upRow = 0; G.upSel = 0; snd('ui_confirm'); }
+  else { G.screen = 'shop'; G.shopSel = 0; snd('ui_confirm'); }
+}
+function shopKey(code) {
+  if (code === 'ArrowUp') { if (G.shopSel > 0) { G.shopSel--; snd('ui_move'); } }
+  else if (code === 'ArrowDown') { if (G.shopSel < SHOP.length - 1) { G.shopSel++; snd('ui_move'); } }
+  else if (code === 'KeyX') { G.screen = 'map'; snd('ui_back'); }
+  else if (code === 'KeyZ') {
+    var i = G.shopSel, s = SHOP[i];
+    if (G.shopLeft[i] > 0 && G.stock.crystal >= s.cost) {
+      G.stock.crystal -= s.cost; G.shopLeft[i]--; addOwned(s.type);
+      snd('buy_item'); tutDone('10');
+    } else snd('ui_deny');
+  }
 }
 function upgradeKey(code) {
   if (code === 'ArrowUp') { if (G.upRow > 0) { G.upRow--; snd('ui_move'); } }
@@ -1906,15 +1886,15 @@ function upgradeKey(code) {
     if (G.upRow === 0) {
       var c = G.upSel === 0 ? 'hunter' : 'bomber';
       if (!G.recruited[c] && G.stock.wood >= RECRUIT_COST) {
-        G.stock.wood -= RECRUIT_COST; G.spent.recruit += RECRUIT_COST; G.recruited[c] = true;
-        emit('upgrade', { key: c, lv: 1, cost: costOf('wood', RECRUIT_COST) });
-        snd('upgrade'); tutDone('11');
+        G.stock.wood -= RECRUIT_COST; G.recruited[c] = true;
+        // 解鎖特效 1.3 秒(只播 unlock_class, 不疊 upgrade / ui_confirm)
+        G.unlockFx = { idx: G.upSel, t: 0 };
+        snd('unlock_class'); tutDone('11');
       } else snd('ui_deny');
     } else {
       var k = G.upRow - 1, cost = statCost(k);
       if (cost && canPay(cost)) {
-        pay(cost); var key = STAT_KEYS[k]; G.up[key]++; G.spent.upgrade += cost.core;
-        emit('upgrade', { key: key, lv: G.up[key], cost: cost });
+        pay(cost); G.up[STAT_KEYS[k]]++;
         snd('upgrade'); tutDone('11');
       } else snd('ui_deny');
     }
@@ -1923,10 +1903,6 @@ function upgradeKey(code) {
 function toMap() {
   R = null; SOL = null; G.panel = null; G.screen = 'map'; G.paused = false; clearKeys();
   checkBossOpen();
-}
-function leaveRun(action) {
-  emit('level_quit', { level: R.l + 1, runT: r1(R.f / 60), x: Math.round(R.p.x), y: Math.round(R.p.y), action: action });
-  var st = G.levelStat[R.l]; st.quits++; st.failSpots.push({ x: Math.round(R.p.x), y: Math.round(R.p.y), by: 'quit' });
 }
 
 // ---------------------------------------------------------------- 輸入(只用鍵盤)
@@ -1938,8 +1914,6 @@ function ensureSound() {
 function applyMute() { try { if (window.Sound && Sound.setMuted) Sound.setMuted(!!G.muted); } catch (e) { } }
 function startSession() {
   G.screen = 'map'; G.mapSel = 0;
-  emit('session_start', { t: 0 });
-  LOG[LOG.length - 1].t = 0;
   G.gt = 0;
   snd('title_start');
 }
@@ -1956,16 +1930,17 @@ function inputDown(code) {
     return;
   }
   if (G.lockT > 0) return;
-  if (code === 'Escape' && (sc === 'play' || sc === 'map' || sc === 'levelPanel' || sc === 'upgrade')) {
+  if (code === 'Escape' && (sc === 'play' || sc === 'map' || sc === 'levelPanel' || sc === 'upgrade' || sc === 'shop')) {
+    // 死亡動畫與過關動畫期間不能暫停
     if (sc === 'play' && R && R.state !== 'run') return;
     G.paused = !G.paused; clearKeys(); snd('pause');
     return;
   }
   if (G.paused) {
     if (sc === 'play') {
-      if (code === 'KeyZ') { leaveRun('retry'); G.paused = false; startRun(R.l, R.cls); }
-      else if (code === 'KeyX') { leaveRun('map'); toMap(); }
-    } else if (code === 'KeyZ') downloadLog();
+      if (code === 'KeyZ') { G.paused = false; startRun(R.l, R.cls); }
+      else if (code === 'KeyX') toMap();
+    }
     return;
   }
   if (sc === 'map') {
@@ -1976,6 +1951,7 @@ function inputDown(code) {
     else if (code === 'KeyZ') mapZ();
   } else if (sc === 'levelPanel') panelKey(code);
   else if (sc === 'upgrade') upgradeKey(code);
+  else if (sc === 'shop') shopKey(code);
   else if (sc === 'play') {
     if (R.state !== 'run') return;
     if (code === 'ArrowLeft') { keys.left = true; tutPressed(-1); }
@@ -1988,11 +1964,10 @@ function inputDown(code) {
     if (code === 'KeyZ') {
       if (G.pendingRec) {
         G.rec[G.resLevel] = G.pendingRec; G.rp[G.resLevel] = { pos: 0, cursor: 0 }; G.pendingRec = null;
-        emit('result_choice', { level: G.resLevel + 1, adopted: true });
       }
       snd('ui_confirm'); toMap();
     } else if (code === 'KeyX' && G.pendingRec) {
-      G.pendingRec = null; emit('result_choice', { level: G.resLevel + 1, adopted: false }); snd('ui_back'); toMap();
+      G.pendingRec = null; snd('ui_back'); toMap();
     }
   } else if (sc === 'fail') {
     if (code === 'KeyZ') { snd('ui_confirm'); startRun(R.l, R.cls); }
@@ -2096,7 +2071,7 @@ function bossDrawState(B) {
 }
 var BOSS_IDLE = { hx: 640, hy: 230, phase: 1, eye: 0, lid: 0, split: 0, weak: null, angry: false, lf: { x: 420, y: 300, rot: 0, show: true, stuck: false }, rf: { x: 860, y: 300, rot: 0, show: true, stuck: false },
   blocks: null, plFall: 0, roar: 0, steam: 0, hit: false, ko: false, koT: 1.5, koDur: 1.5, hp: 45, maxHp: 45, chip: 45, chipT: 0.4 };
-// o: {L, rep, S, mode: 'live' | 'preview' | 'thumb', taken(id), chestOpen, fog(i), build(i)}
+// o: {L, rep, S, mode: 'live' | 'preview' | 'thumb', taken(id), chestOpen, fog(i), build(i), noPlayer(死亡動畫: 不畫玩家), noRings(死亡 / 過關動畫: 不畫技能環與射程圈), cheering(過關動畫歡呼姿勢), cheerT(過關動畫: 旗子揮動與歡呼姿勢)}
 function drawScene(c, o) {
   var L = o.L, S = o.S, live = o.mode === 'live', thumb = o.mode === 'thumb', i;
   if (!o.cached) drawTerrain(c, L);
@@ -2112,10 +2087,10 @@ function drawScene(c, o) {
   if (!g.hidden || S.gfall > 0) {
     var gy = g.y;
     if (g.hidden) gy = g.y - (1 - Math.min(1, S.gfall / 0.5)) * 400;
-    Art.drawGoal(c, { x: g.x, y: gy, reached: live && !!R.atGoal, cheerT: live && R.state === 'cheer' ? Math.min(0.6, R.cheerT) : 0.6, cheerDur: 0.6 });
+    Art.drawGoal(c, { x: g.x, y: gy, reached: live && !!R.atGoal, cheerT: o.cheerT === undefined ? CLEAR_DUR : o.cheerT, cheerDur: CLEAR_DUR });
   }
-  if (live && S.p && S.p.cls === 'hunter' && !S.p.stealth) Art.drawRangeRing(c, { x: S.p.x, y: S.p.y, radius: 260 });
-  if (live && S.p && R.state !== 'fail') {
+  if (live && !o.noRings && S.p && S.p.cls === 'hunter' && !S.p.stealth) Art.drawRangeRing(c, { x: S.p.x, y: S.p.y, radius: 260 });
+  if (live && !o.noRings && S.p) {
     var p = R.p, cdT = Math.max(0, Math.min(p.skDur, p.skDur - p.skCd));
     Art.drawSkillRing(c, { x: p.x, y: p.y + p.h / 2, cls: R.cls, cdT: cdT, cdDur: p.skDur, readyT: p.readyT, readyDur: 0.5, castT: p.castT, castDur: 0.3,
       denyT: p.denyT, denyDur: 0.25, stealthLeft: p.stealth ? Math.max(0, 2.5 - p.stealthT) : 0, stealthDur: 2.5 });
@@ -2128,11 +2103,12 @@ function drawScene(c, o) {
     var big = m.k === 'mother';
     Art.drawHpBar(c, { x: m.x, y: m.y - m.h / 2 - 8, hp: m.hp, maxHp: m.mhp, shield: m.sh, maxShield: m.msh, chip: m.chip, chipT: m.chipT, chipDur: 0.4, big: big, weak: !!m.weak });
   });
-  if (S.boss && o.mode !== 'preview') {
+  // 巨像血量歸 0(崩解演出起)不再畫血條
+  if (S.boss && o.mode !== 'preview' && !S.boss.ko && S.boss.hp > 0) {
     var B = S.boss;
     Art.drawBossHpBar(c, { x: B.hx, y: B.hy - 80 - 20 - 44 * B.split, hp: B.hp, maxHp: B.maxHp, marks: [30, 15], chip: B.chip, chipT: B.chipT, chipDur: 0.4, weak: !!B.weak });
   }
-  if (S.p) Art.drawPlayer(c, { x: S.p.x, y: S.p.y, cls: S.p.cls, facing: S.p.facing, pose: S.p.pose, poseT: S.p.poseT, invuln: S.p.inv, stealth: S.p.stealth,
+  if (S.p && !o.noPlayer) Art.drawPlayer(c, { x: S.p.x, y: S.p.y, cls: S.p.cls, facing: S.p.facing, pose: o.cheering ? 'cheer' : S.p.pose, poseT: o.cheering ? Math.max(0, o.cheerT) : S.p.poseT, invuln: S.p.inv, stealth: S.p.stealth,
     stealthT: S.p.stealthT, stealthDur: 2.5, unstealthT: S.p.unT, unstealthDur: 0.3 });
   S.a.forEach(function (a) { Art.drawArrow(c, { x: a[0], y: a[1], angle: a[2] }); });
   S.b.forEach(function (b) { Art.drawBomb(c, { x: b[0], y: b[1], t: b[2] }); });
@@ -2224,21 +2200,51 @@ function hudState(mode) {
   return s;
 }
 function drawSoundIcon(c) { if (!isTouch()) Art.drawSoundIcon(c, { x: 1250, y: 62, on: !G.muted }); }
-function liveScene(c) {
+// 關卡畫面(世界部分, 不含資訊列): mode 'run' 一般 | 'clear' 過關動畫(以焦點放大) | 'dead' 死亡動畫(不畫玩家)
+function liveScene(c, mode) {
   var S = R.lastSnap || R.frames[R.frames.length - 1];
-  var sh = R.shake > 0;
+  var sh = R.shake > 0 && mode === 'run';
+  var cl = mode === 'clear', dead = mode === 'dead';
   if (sh) { c.save(); c.translate((Math.random() * 2 - 1) * 3, (Math.random() * 2 - 1) * 3); }
+  if (cl) {
+    var z = clearZoom(R.cT), f = R.focus;
+    c.save(); c.translate(f.x, f.y); c.scale(z, z); c.translate(-f.x, -f.y);
+  }
   drawScene(c, { L: R.L, rep: R.rep, S: S, mode: 'live', taken: function (id) { return R.taken[id] !== undefined; }, chestOpen: R.chestOpen,
-    fog: function (i) { return R.rep[i] ? -1 : 0; }, build: function (i) { return 0.6; } });
+    fog: function (i) { return R.rep[i] ? -1 : 0; }, build: function (i) { return 0.6; }, noPlayer: dead, noRings: dead || cl, cheering: cl && R.cT >= 0, cheerT: cl ? Math.max(0, R.cT) : undefined });
   var g = R.L.goal, gActive = !g.hidden || R.goalFall >= 0.5;
-  if (R.atGoal && R.state === 'run' && gActive) Art.drawGoalPrompt(c, { x: g.x, y: g.y - 40, first: !T.done['6'], t: G.t });
+  if (mode === 'run' && R.atGoal && R.state === 'run' && gActive) Art.drawGoalPrompt(c, { x: g.x, y: g.y - 40, first: !T.done['6'], t: G.t });
   R.popups.forEach(function (p) { Art.drawPopup(c, { x: p.x, y: p.y, t: p.t, dur: 0.8, kind: p.kind, value: p.value }); });
   R.chainTexts.forEach(function (p) { Art.drawChainText(c, { x: p.x, y: p.y, n: p.n, t: p.t, dur: 0.8 }); });
+  if (cl) c.restore();
   if (sh) c.restore();
 }
 
 // ---------------------------------------------------------------- 繪製: 各畫面
 function repCount(l) { var n = 0; G.repaired[l].forEach(function (v) { if (v) n++; }); return n; }
+// 每處工程在縮圖上佔的區域(迷霧矩形 + 工程結構格外接矩形, × 0.125, 相對縮圖左上, 裁在 160×90 內)
+function siteRegion(l, i) {
+  var st = LEVELS[l].sites[i];
+  if (st.thumbRects) return st.thumbRects;
+  var rs = st.fog.map(function (f) { return [f[0] * TS, f[1] * TS, f[2] * TS, f[3] * TS]; });
+  var cells = st.kind === 'nestgate' ? gateCells(st) : st.cells, c0 = 99, r0 = 99, c1 = -1, r1_ = -1;
+  cells.forEach(function (q) { c0 = Math.min(c0, q[0]); r0 = Math.min(r0, q[1]); c1 = Math.max(c1, q[0] + 1); r1_ = Math.max(r1_, q[1] + 1); });
+  rs.push([c0 * TS, r0 * TS, (c1 - c0) * TS, (r1_ - r0) * TS]);
+  var out = [];
+  rs.forEach(function (q) {
+    var x0 = Math.max(0, q[0] * 0.125), y0 = Math.max(0, q[1] * 0.125), x1 = Math.min(160, (q[0] + q[2]) * 0.125), y1 = Math.min(90, (q[1] + q[3]) * 0.125);
+    if (x1 > x0 && y1 > y0) out.push([x0, y0, x1 - x0, y1 - y0]);
+  });
+  st.thumbRects = out;
+  return out;
+}
+function cardRegions(l) {
+  var p = CARD_POS[l], regs = [];
+  LEVELS[l].sites.forEach(function (st, i) {
+    regs.push({ repaired: !!G.repaired[l][i], rects: siteRegion(l, i).map(function (q) { return [p[0] + 8 + q[0], p[1] + 8 + q[1], q[2], q[3]]; }) });
+  });
+  return regs;
+}
 function renderMap(c) {
   Art.drawMapBackground(c, { t: G.t });
   [[0, 1], [0, 2], [1, 3], [1, 4], [2, 5], [2, 6], [3, 7], [4, 7], [5, 7], [6, 7]].forEach(function (e) {
@@ -2250,9 +2256,10 @@ function renderMap(c) {
     var st = levelState(l), rec = G.rec[l], cost = zeros();
     if (l < 7 && (st === 'sealed' || st === 'buyable')) cost.wood = UNLOCK_COST[l];
     var zr = zeros(), rates = rec ? rateOf(l, rec) : zr;
+    var built = (st === 'open' || st === 'cleared');
     Art.drawLevelCard(c, { x: CARD_POS[l][0], y: CARD_POS[l][1], index: l + 1, name: LEVELS[l].name, theme: THEMES[l], state: st, cost: cost, stock: G.stock,
       need: (l === 7 && st === 'sealed') ? left7 : null, rates: rates, recordCls: rec ? rec.cls : null, recordTime: rec ? r1(rec.N / 60) : null,
-      repairedCount: repCount(l), siteCount: LEVELS[l].sites.length });
+      repairedCount: repCount(l), siteCount: LEVELS[l].sites.length, devices: built ? G.slots[l].slice() : null });
     var rp = null, marks = [];
     if (st === 'open') drawThumb(c, l, previewSnap(l), function () { return false; }, G.chestTaken[l]);
     else if (st === 'cleared') {
@@ -2260,15 +2267,17 @@ function renderMap(c) {
       drawThumb(c, l, S, function (id) { return rec.pickF[id] !== undefined && rec.pickF[id] <= fi; }, rec.chestF >= 0 ? fi >= rec.chestF : G.chestTaken[l]);
       rp = Math.max(0, Math.min(1, G.rp[l].pos / Math.max(1, rec.N))); marks = rec.marks;
     }
-    Art.drawCardOverlay(c, { x: CARD_POS[l][0], y: CARD_POS[l][1], speedMul: rec ? speedMul(l) : 1, newArea: !!rec && rec.ver < G.repairVer[l], selected: G.mapSel === l, replayP: rp, marks: marks });
+    Art.drawCardOverlay(c, { x: CARD_POS[l][0], y: CARD_POS[l][1], speedMul: rec ? speedMul(l) : 1, newArea: !!rec && rec.ver < G.repairVer[l], selected: G.mapSel === l, replayP: rp, marks: marks,
+      regions: (built && LEVELS[l].sites.length) ? cardRegions(l) : [] });
   }
-  Art.drawWorkshopCard(c, { x: WORK_POS[0], y: WORK_POS[1], anyAffordable: anyAffordable(), selected: G.mapSel === 8 });
+  Art.drawWorkshopCard(c, { x: CARD_POS[8][0], y: CARD_POS[8][1], anyAffordable: anyAffordable(), allDone: allUpgraded(), selected: G.mapSel === 8 });
+  Art.drawShopCard(c, { x: CARD_POS[9][0], y: CARD_POS[9][1], anyAffordable: shopAffordable(), soldOut: shopSoldOut(), selected: G.mapSel === 9 });
   G.flights.forEach(function (f) {
     var pp = flightPos(f);
     Art.drawFlyingMaterial(c, { x: pp[0], y: pp[1], kind: f.kind, t: f.t, dur: 0.7 });
   });
   Art.drawHud(c, hudState('map'));
-  txt(c, isTouch() ? '↑↓←→ 選擇  Z 確定' : '↑↓←→ 選擇  Z 確定  Esc 暫停  M 靜音', W / 2, 702, 18, '#fff', 'center');
+  txt(c, isTouch() ? '↑↓←→ 選擇  Z 確定' : '↑↓←→ 選擇  Z 確定  Esc 暫停  M 靜音', 440, 702, 18, '#fff', 'left');
 }
 function renderPanel(c) {
   renderMap(c);
@@ -2276,8 +2285,8 @@ function renderPanel(c) {
   Art.drawLevelPanel(c, {
     index: l + 1, name: L.name, theme: L.theme, row: P.row,
     sites: L.sites.map(function (st, i) { return { status: G.repaired[l][i] ? 'done' : 'open', role: st.role, kind: st.kind, cost: costOf('stone', G.repaired[l][i] ? 0 : st.cost) }; }),
-    siteSel: L.sites.length ? P.siteSel : null, slots: G.slots[l].map(function (it) { return it ? it.type : null; }), slotSel: P.slotSel,
-    bagCount: G.bag.length, shopLeft: G.shopLeft.filter(function (v) { return v > 0; }).length,
+    siteSel: L.sites.length ? P.siteSel : null, slots: G.slots[l].slice(), slotSel: P.slotSel,
+    storeCount: storeTotal(),
     recordCls: rec ? rec.cls : null, recordTime: rec ? r1(rec.N / 60) : null, rates: rec ? rateOf(l, rec) : null, speedMul: rec ? speedMul(l) : 1,
     newArea: !!rec && rec.ver < G.repairVer[l], stock: G.stock
   });
@@ -2286,23 +2295,25 @@ function renderPanel(c) {
     var b = L.sites[P.siteSel].box;
     Art.drawSiteHighlight(c, { x: 60 + b[0] * 20, y: 96 + b[1] * 20, w: Math.max(20, Math.min(640, b[2] * 20)), h: Math.max(20, Math.min(360, b[3] * 20)), active: true });
   }
-  if (P.sub === 'bag') {
-    Art.drawBackpackPanel(c, { slotNo: P.slotFor + 1, level: l + 1, sel: P.bagSel,
-      items: G.bag.slice(0, 23).map(function (it) { return { type: it.type, where: it.where ? { level: it.where.level + 1, slot: it.where.slot + 1 } : null }; }) });
-  } else if (P.sub === 'shop') {
-    Art.drawShopPanel(c, { sel: P.shopSel, stock: G.stock,
-      entries: SHOP.map(function (s, i) { return { type: s.type, cost: costOf('crystal', s.cost), left: G.shopLeft[i], max: s.max }; }) });
+  if (P.sub === 'dev') {
+    Art.drawDevicePanel(c, { slotNo: P.slotFor + 1, level: l + 1, current: G.slots[l][P.slotFor], entries: devEntries(), sel: P.devSel });
   } else if (P.sub === 'class') {
     Art.drawClassSelect(c, { sel: P.clsSel, classes: CLS_LIST.map(function (k) { return { cls: k, owned: !!G.recruited[k] }; }) });
   }
 }
+function renderShop(c) {
+  renderMap(c);
+  Art.drawShopPanel(c, { sel: G.shopSel, stock: G.stock,
+    entries: SHOP.map(function (s, i) { return { type: s.type, cost: costOf('crystal', s.cost), left: G.shopLeft[i], max: s.max }; }) });
+}
 function renderUpgrade(c) {
   renderMap(c);
+  var fx = G.unlockFx;
   Art.drawUpgradePage(c, {
     row: G.upRow, recruitSel: G.upSel,
     recruits: [{ cls: 'hunter', owned: !!G.recruited.hunter, cost: recruitCost() }, { cls: 'bomber', owned: !!G.recruited.bomber, cost: recruitCost() }],
     stats: STAT_KEYS.map(function (k, i) { return { key: k, lv: G.up[k], maxLv: STAT_MAX[i], cost: statCost(i) }; }),
-    stock: G.stock
+    stock: G.stock, unlockIdx: fx ? fx.idx : null, unlockT: fx ? Math.min(1.3, fx.t) : 1.3, unlockDur: 1.3
   });
 }
 function endTotals() {
@@ -2323,20 +2334,37 @@ function render() {
   if (sc === 'title') Art.drawTitle(c, { t: G.t, touch: isTouch() });
   else if (sc === 'map') { renderMap(c); drawTutorialNow(c); if (G.paused) Art.drawPausePanel(c, { mode: 'map', touch: isTouch() }); }
   else if (sc === 'levelPanel') { renderPanel(c); drawTutorialNow(c); if (G.paused) Art.drawPausePanel(c, { mode: 'map', touch: isTouch() }); }
+  else if (sc === 'shop') { renderShop(c); drawTutorialNow(c); if (G.paused) Art.drawPausePanel(c, { mode: 'map', touch: isTouch() }); }
   else if (sc === 'upgrade') { renderUpgrade(c); drawTutorialNow(c); if (G.paused) Art.drawPausePanel(c, { mode: 'map', touch: isTouch() }); }
   else if (sc === 'play' || sc === 'result' || sc === 'fail') {
-    liveScene(c);
-    Art.drawHud(c, hudState('level'));
-    if (R.notice) Art.drawItemNotice(c, { type: R.notice.type, t: R.notice.t, dur: 1.5 });
-    if (sc === 'play') {
-      if (R.state === 'cheer' && T.g6 !== undefined && T.g6 < 0.6 && !G.paused) {
+    var rs = R.state;
+    if (sc === 'result') {
+      // 結算面板開著: 全木板當底(t = 1.4)
+      Art.drawClearIris(c, { cx: R.focus.x, cy: R.focus.y, t: CLEAR_DUR, dur: CLEAR_DUR });
+      Art.drawHud(c, hudState('level'));
+      Art.drawResultPanel(c, G.res);
+    } else if (rs === 'fail') {
+      // 死亡動畫(畫定格的世界, 不畫玩家)與失敗面板(t = 1.3 暗下的世界當底)
+      liveScene(c, 'dead');
+      var d = R.dead;
+      Art.drawDeathFx(c, { x: d.x, y: d.y, cls: R.cls, facing: d.facing, hitX: d.hitX, hitY: d.hitY, t: Math.min(DEATH_DUR, R.deadT), dur: DEATH_DUR });
+      Art.drawHud(c, hudState('level'));
+      if (sc === 'fail') Art.drawFailPanel(c, {});
+    } else if (rs === 'clear') {
+      liveScene(c, 'clear');
+      Art.drawClearIris(c, { cx: R.focus.x, cy: R.focus.y, t: Math.max(0, Math.min(CLEAR_DUR, R.cT)), dur: CLEAR_DUR });
+      Art.drawHud(c, hudState('level'));
+      if (R.cT < 0 && !G.paused) {
         var g = R.L.goal;
-        Art.drawTutorial(c, { stage: '6', text: '按 ↓ 完成關卡', keys: ['down'], pressed: [false], bx: g.x - 100, by: g.y - 40 - 56, bw: 200, bh: 48, tip: null, doneT: T.g6, doneDur: 0.6, t: G.t });
-      } else drawTutorialNow(c);
+        Art.drawTutorial(c, { stage: '6', text: '按 ↓ 完成關卡', keys: ['down'], pressed: [false], bx: g.x - 100, by: g.y - 40 - 56, bw: 200, bh: 48, tip: null, doneT: Math.max(0, Math.min(0.6, R.cT + 0.6)), doneDur: 0.6, t: G.t });
+      }
+    } else {
+      liveScene(c, 'run');
+      Art.drawHud(c, hudState('level'));
+      if (R.notice) Art.drawItemNotice(c, { type: R.notice.type, t: R.notice.t, dur: 1.5 });
+      drawTutorialNow(c);
+      if (G.paused) Art.drawPausePanel(c, { mode: 'level', touch: isTouch() });
     }
-    if (sc === 'result') Art.drawResultPanel(c, G.res);
-    else if (sc === 'fail') Art.drawFailPanel(c, {});
-    else if (G.paused) Art.drawPausePanel(c, { mode: 'level', touch: isTouch() });
   } else if (sc === 'ending') {
     Art.drawEnding(c, { t: Math.min(14, G.ending.t), totalTime: r1(G.endTime || G.gt), kills: G.kills, totals: endTotals() });
   }
@@ -2369,7 +2397,6 @@ function update(dt) {
   if (G.screen === 'ending') {
     var en = G.ending;
     en.t = Math.min(14, en.t + dt);
-    if (en.t >= 10.4 && !en.logged) { en.logged = true; emit('ending', { totalTime: r1(G.endTime) }); downloadLog(); }
     return;
   }
   G.gt += dt;
@@ -2380,16 +2407,28 @@ function update(dt) {
   for (var ti = G.timers.length - 1; ti >= 0; ti--) { G.timers[ti].t -= dt; if (G.timers[ti].t <= 0) { var tf = G.timers[ti].fn; G.timers.splice(ti, 1); tf(); } }
   advanceReplays(dt);
   updateFlights(dt);
-  if (T.g6 !== undefined && T.g6 < 0.6) T.g6 += dt;
   tutStep(dt);
-  if (G.screen === 'play' && R && (R.state === 'run' || R.state === 'cheer')) {
+  if (G.unlockFx) { G.unlockFx.t += dt; if (G.unlockFx.t >= 1.3) G.unlockFx = null; }
+  if (G.screen === 'play' && R && R.state === 'clear') {
+    R.cT += dt;
+    if (R.cT >= 1.15 && !R.irisSnd) { R.irisSnd = true; snd('iris_close'); }
+    if (R.cT >= CLEAR_DUR) { R.cT = CLEAR_DUR; winRun(); }
+    return;
+  }
+  if (G.screen === 'play' && R && R.state === 'fail') {
+    R.deadT += dt;
+    if (!R.shatterDone && R.deadT >= 0.7) { R.shatterDone = true; snd('shatter'); }
+    if (R.deadT >= DEATH_DUR) { R.deadT = DEATH_DUR; G.screen = 'fail'; snd('level_fail'); }
+    return;
+  }
+  if (G.screen === 'play' && R && R.state === 'run') {
     acc += dt;
-    while (acc >= DT && R && (R.state === 'run' || R.state === 'cheer')) {
+    while (acc >= DT && R && R.state === 'run') {
       stepRun();
       edge.z = edge.x = edge.down = edge.jump = edge.jumpRel = false;
       acc -= DT;
     }
-    if (R && R.state !== 'fail' && R.state !== 'won') R.lastSnap = snap();
+    if (R && R.state === 'run') R.lastSnap = snap();
   } else acc = 0;
 }
 function frameLoop(ts) {

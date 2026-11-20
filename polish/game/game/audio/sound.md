@@ -35,8 +35,9 @@
 | `repair` | repair | 修好工程(施工開始) | — | sfx_repair.mp3(石塊落定 + 兩下釘木板) | −15 |
 | `fog_clear` | fog_clear | 迷霧推開(施工後 0.6 秒) | — | sfx_fog_clear.mp3(慢風切 + 亮音) | −16 |
 | `buy_item` | buy_item | 商店買下 | — | sfx_buy_item.mp3(錢幣 + 亮音) | −18 |
-| `equip` | equip | 裝上 / 卸下道具 | — | sfx_equip.mp3(金屬卡榫) | −18 |
-| `upgrade` | upgrade | 招募 / 強化 | — | sfx_upgrade.mp3(鐵鎚敲鐵 + 短上揚) | −14 |
+| `equip` | equip | 在裝置倉庫安裝 / 拆下裝置 | — | sfx_equip.mp3(金屬卡榫) | −18 |
+| `upgrade` | upgrade | 強化(移速 / 血量 / 冷卻 / 攻擊) | — | sfx_upgrade.mp3(鐵鎚敲鐵 + 短上揚) | −14 |
+| `unlock_class` | unlock_class | **本輪新增** 解鎖職業, 解鎖特效開始那一刻(只播這個, 不疊 `upgrade`、`ui_confirm`) | — | sfx_unlock_class.mp3(1.33 秒: 反轉力場聲 0.42 秒漸強當光柱降下 → 鐘聲落地 + 同旋律薩克斯 / 撥弦 / 鋼鼓三分軌上揚) | −11 |
 | `coin_land` | coin_land | 大地圖飛行素材投進資訊列 | — | sfx_coin_land.mp3(錢幣叮) | −24 |
 | `jump` | jump | 起跳 | — | sfx_jump.mp3 | −22 |
 | `land` | land | 從高處落地(下落速度 > 600px/秒) | — | sfx_land.mp3 | −18 |
@@ -54,7 +55,7 @@
 | `drop_collect` | drop_collect | 噴出的素材粒被吸回玩家 | — | sfx_drop_collect.mp3 | −24 |
 | `pickup` | pickup | 撿到地上素材 | — | sfx_pickup.mp3 | −18 |
 | `chest_open` | chest_open | 開寶箱 | — | sfx_chest_open.mp3 | −15 |
-| `item_get` | item_get | 「獲得 <道具名>」提示出現 | — | sfx_item_get.mp3(薩克斯小號角) | −14 |
+| `item_get` | item_get | 「獲得 <裝置名>」提示出現 | — | sfx_item_get.mp3(薩克斯小號角) | −14 |
 | `monster_down` | monster_down | 一般怪被擊倒 | — | sfx_monster_down.mp3 | −14 |
 | `chain` | chain | 冒出「N 連鎖」 | `n` | sfx_chain.mp3(雙撥弦, 隨 N 升高) | −18.6 |
 | `brood_down` | brood_down | 巢母被擊倒 | — | sfx_brood_down.mp3 | −10 |
@@ -66,8 +67,11 @@
 | `player_hurt` | player_hurt | 玩家扣血(含尖刺) | — | sfx_player_hurt.mp3 | −13 |
 | `skill_ready` | skill_ready | 技能冷卻完成 | — | sfx_skill_ready.mp3 | −21 |
 | `goal_reach` | goal_reach | 碰到終點旗、出現「按 ↓」提示 | — | sfx_goal_reach.mp3(短上揚, 未收尾) | −15 |
-| `level_clear` | level_clear | 按 `↓` 過關 | — | sfx_level_clear.mp3(同組旋律完整上揚, 撥弦 + 鋼鼓) | −12 |
-| `level_fail` | level_fail | 失敗面板出現 | — | sfx_level_fail.mp3(同組旋律下降) | −14 |
+| `level_clear` | level_clear | 按 `↓` 過關那一刻(世界定格) | — | sfx_level_clear.mp3(同組旋律完整上揚, 撥弦 + 鋼鼓) | −12 |
+| `iris_close` | iris_close | **本輪新增** 過關動畫第 1.15 秒, 光圈一口氣收成一點(閃金星)那一刻; 第一次過關動畫晚 0.6 秒開始, 照實際動畫時間呼叫 | — | sfx_iris_close.mp3(0.8 秒: 0.13 秒短風切「咻」→ 亮音「叮」, 「叮」落在呼叫後約 0.13 秒) | −15 |
+| `player_death` | player_death | **本輪新增** 死亡動畫開始(血量歸 0 或掉出畫面, 世界暗下)。這一下**不呼叫** `player_hurt` | — | sfx_player_death.mp3(0.65 秒: 重擊 + 降八度的「咚」+ 低鐘餘響, 比受傷沉、持續到碎裂前) | −12 |
+| `shatter` | shatter | **本輪新增** 死亡動畫第 0.7 秒, 角色碎成碎片那一刻 | — | sfx_shatter.mp3(0.5 秒: 玻璃重碎 + 4 片越來越小、越來越高的碎片散落) | −14 |
+| `level_fail` | level_fail | 失敗面板出現(死亡動畫播完, 約 1.3 秒) | — | sfx_level_fail.mp3(同組旋律下降) | −14 |
 | `tutorial_done` | tutorial_done | 教學階段完成特效 | — | sfx_tutorial_done.mp3 | −17 |
 | `boss_slam` | boss_slam | 巨拳砸地(砸到的那一刻) | — | sfx_boss_slam.mp3 | −10 |
 | `boss_beam_charge` | boss_beam_charge | 大眼聚光預備開始 | — | sfx_boss_beam_charge.mp3(1.2 秒漸強, 尾端接光束) | −15 |
@@ -121,12 +125,16 @@
 | `boss_phase` | `hit` |
 | `shield_break` | `hit_block` |
 | `level_fail` | `player_hurt` |
+| `player_death` | `player_hurt` |
 
+- 死亡: `player_death`(0 秒)→ `shatter`(0.7 秒)→ `level_fail`(1.3 秒), 三者依時間各播一次, 由 RD 照死亡動畫的時間呼叫; `player_death` 的餘響在 0.65 秒收掉, 不會和碎裂聲疊糊
+- 過關: `level_clear`(按 `↓`)→ `iris_close`(1.15 秒); 第一次過關時 `tutorial_done` 跟 `level_clear` 疊著播
+- 解鎖職業: 只播 `unlock_class`(教學階段 11 的 `tutorial_done` 疊著播)
 - 疊著播的: `monster_down` + `chain`; `chest_open` + `item_get`(後者晚 0.15 秒, 由 RD 延遲呼叫); `repair` 後 0.6 秒 `fog_clear`
 - 甲蟲被擊飛撞爆只播 `explosion`(由 RD 不呼叫 `monster_down`)
 - 限頻(同名事件最短間隔, RD 有做也無害): `hit` 0.05 秒、`coin_land` 0.06 秒、`drop_collect` 0.08 秒、`hit_block` 0.05 秒、`ui_move` 0.03 秒、`arrow` 0.05 秒、`rock_drop` 0.05 秒、`boss_rock` 0.08 秒、`pickup` 0.03 秒
 - 會連發的事件(`hit`、`coin_land`、`drop_collect`、`arrow`、`slash`、`pickup` 等)每次隨機微調音高 ±4~8%, 不會像機關槍
-- 音量層級: Boss / 巢母大事件(−9~−11)> 爆炸、受傷、過關(−11~−14)> 一般戰鬥(−15~−18)> 介面與背景性的連發音(−21~−24)。玩家受傷(−13)刻意比打怪的 `hit`(−17)響, 不會被淹沒
+- 音量層級: Boss / 巢母大事件(−9~−11)> 爆炸、受傷、死亡、過關、解鎖職業(−11~−14)> 一般戰鬥(−15~−18)> 介面與背景性的連發音(−21~−24)。玩家受傷(−13)刻意比打怪的 `hit`(−17)響, 不會被淹沒; `player_death`(−12)比 `player_hurt` 響且尾音長(受傷 0.15 秒就掉到 −26, 死亡維持 −17~−22 到 0.4 秒), 聽得出「這下是死了」; `unlock_class`(−11)比 `upgrade`(−14)響、長(1.33 對 0.5 秒有效長度), 規格要的「更隆重」
 
 ## 理念或經驗落實
 
@@ -140,8 +148,11 @@
 - **Kenney 下載帶瀏覽器標頭、走 download-link 取簽名網址, 檢查 `PK` 檔頭**(授權與下載 / Kenney 403): 照做, 7 個 Kenney 包一次下成功
 - **頁面列多種授權時選 CC0**(授權與下載 / 混合授權): Battle Sound Effects 頁面同列 CC-BY / CC-BY-SA / CC0, 選 CC0 並寫在 credits.md
 - **成對事件取同一段旋律**(素材來源 / 成對事件): Kenney Music Jingles 每種樂器的同編號是同一段旋律 — `goal_reach`(短上揚, 未收尾)→ `level_clear`(完整上揚, 撥弦 + 鋼鼓兩分軌); `level_fail` 用同組的下降句; `boss_down` 尾段接 `level_clear` 的同一句, 聽得出是「大一號的過關」
+- **同編號疊多種樂器 = 大一號的同家族**(素材來源 / 成對事件(續)): 本輪新增的 `unlock_class` 用 10 號旋律(+2→+7 上揚), 疊薩克斯 + 撥弦 + 鋼鼓三分軌, 是 `item_get`(薩克斯 + 撥弦)與 `unlock_level`(鋼鼓)的大一號; 不用過關的 02 號, 免得跟過關混淆; 薩克斯起音慢, 提早 0.06 秒擺並墊撥弦當起音
+- **蓄力用反轉素材, 尾端正好是撞擊**(事件設計): `unlock_class` 前 0.42 秒是反轉力場聲(光柱降下), 尾端接鐘聲落地與上揚樂句(角色躍出); 開頭墊一層亮音, 到峰值一成 0 毫秒
+- **本輪新增 4 個音效全用上一輪已下載的 Kenney / OpenGameArt CC0 素材包**(授權與下載): 跟既有音效同源, 聲音風格一致, 不需新的授權來源
 - **限幅只壓起音尖峰, 最多 4 dB**(混音與音量 / 打擊類素材): `beetle_fuse` 限幅 3.2 dB 後停在 −18.8(目標 −16), 表上寫的是實際量到的響度
 - **暫停壓低的掛勾放在 play 最前面, 不受靜音與限頻影響; 換曲時清掉, 保留 0.15 秒內剛設的**(技術 / 壓低原因): 照做; 本作只有暫停一種原因, 另加「關卡動作音出現就解除」當 RD 漏呼叫的保險
-- **冒煙測試用假 Audio / AudioContext 逐一驗**(技術): init 前呼叫、51 個事件各一次、讓位、限頻、暫停開關 / 靜音中開關 / 換曲清除、無 Web Audio 退回播放池, 全部通過
+- **冒煙測試用假 Audio / AudioContext 逐一驗**(技術): init 前呼叫、interface.json 的 55 個事件各一次、讓位(含本輪新增的 `player_death` 讓 `player_hurt`)、死亡三段依序、靜音、無 Web Audio 退回播放池, 全部通過
 
 輕重與辨識度都是量測數字推定的, **聽感待試玩確認**。

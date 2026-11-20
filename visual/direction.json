@@ -54,5 +54,33 @@
  "boss-stage": {
   "id": "C",
   "note": ""
+ },
+ "death-anim": {
+  "id": "B",
+  "note": ""
+ },
+ "clear-anim": {
+  "id": "C",
+  "note": ""
+ },
+ "result-panel": {
+  "id": "B",
+  "note": ""
+ },
+ "unlock-fx": {
+  "id": "B",
+  "note": ""
+ },
+ "map-card": {
+  "id": "B",
+  "note": ""
+ },
+ "devices": {
+  "id": "C",
+  "note": ""
+ },
+ "map-layout": {
+  "id": "B",
+  "note": "商店入口跟升級所一樣只放簡單圖示, 不顯示剩餘商品或其他細節; 商店全部售完時掛大標籤「已售完」; 升級所在全職業解鎖且所有升級都升完時掛大標籤「全解鎖」"
  }
 }

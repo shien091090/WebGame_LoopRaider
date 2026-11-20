@@ -12,3 +12,10 @@ skill-cd: A
 final-boss: B
 ending: B
 boss-stage: C
+death-anim: B
+clear-anim: C
+result-panel: B
+unlock-fx: B
+map-card: B
+devices: C
+map-layout: B, 商店入口跟升級所一樣只放簡單圖示, 不顯示剩餘商品或其他細節; 商店全部售完時掛大標籤「已售完」; 升級所在全職業解鎖且所有升級都升完時掛大標籤「全解鎖」

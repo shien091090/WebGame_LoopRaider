@@ -1,7 +1,7 @@
-stage: deepen(深掘)
+stage: polish(打磨)
 rounds: 探索 2, 深掘 3, 打磨 0
 current: deepen-3
-status: 等待試玩回饋
+status: 視覺設計: 等使用者確認元素清單
 log:
 - 2026-11-16 建立專案, 玩法寫入 idea.md
 - 2026-11-16 探索第1輪設計完成, 3 款: game-a, game-b, game-c
@@ -15,3 +15,5 @@ log:
 - 2026-11-19 深掘第2輪檢討假設完成, 選擇: continue
 - 2026-11-19 深掘第3輪設計完成, 3 款: game-a, game-b, game-c
 - 2026-11-19 深掘第3輪 game-a 修 bug 完成
+- 2026-11-20 深掘第3輪檢討假設完成, 選擇: next
+- 2026-11-20 視覺設計列出核心視覺元素

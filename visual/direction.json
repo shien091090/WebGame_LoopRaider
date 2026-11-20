@@ -1,0 +1,58 @@
+{
+ "title": {
+  "id": "B",
+  "note": "中間不放三個角色, 改成一棟倉庫建築物"
+ },
+ "hero": {
+  "id": "A",
+  "note": ""
+ },
+ "ui": {
+  "id": "A",
+  "note": "頂端資訊列的素材區不標用途(開路/修復/加速/強化等文字拿掉); 關卡進行中右上的「這趟」區塊移除不顯示"
+ },
+ "materials": {
+  "id": "C",
+  "note": "改名: 石料→石頭、時晶→水晶、獸魂→魔核"
+ },
+ "monsters": {
+  "id": "B",
+  "note": ""
+ },
+ "combat-fx": {
+  "id": "A",
+  "note": ""
+ },
+ "replay-map": {
+  "id": "B",
+  "note": ""
+ },
+ "repair-fog": {
+  "id": "A",
+  "note": ""
+ },
+ "themes": {
+  "id": "B",
+  "note": ""
+ },
+ "stage-panel": {
+  "id": "A",
+  "note": "拿掉職業選擇區塊(按開始挑戰之後才選職業); 拿掉加速器區塊(加速器改成道具); 新增商店入口"
+ },
+ "skill-cd": {
+  "id": "A",
+  "note": ""
+ },
+ "final-boss": {
+  "id": "B",
+  "note": ""
+ },
+ "ending": {
+  "id": "B",
+  "note": ""
+ },
+ "boss-stage": {
+  "id": "C",
+  "note": ""
+ }
+}

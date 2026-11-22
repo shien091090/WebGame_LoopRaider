@@ -57,9 +57,11 @@
   var HUD_X = { wood: 16, stone: 186, crystal: 356, core: 526 };
   var CLS = ['sword', 'hunter', 'bomber'];
   var CLS_NAME = { sword: '劍士', hunter: '獵人', bomber: '炸彈工' };
-  var CLS_GOOD = { sword: '跨寬坑', hunter: '潛行穿怪群', bomber: '破岩牆、擊飛' };
+  // 職業說明兩行(polish 第 3 輪使用者定稿; 職業選擇卡與升級所職業卡共用)
+  var CLS_TRAIT = { sword: '揮砍', hunter: '自動索敵', bomber: '爆破' };
+  var CLS_SKILL = { sword: '衝刺', hunter: '潛行', bomber: '爆風擊退' };
   var ROLES = ['shortcut', 'treasure', 'nest'];
-  var ROLE_NAME = { shortcut: '捷徑', treasure: '寶區', nest: '巢穴' };
+  var ROLE_NAME = { shortcut: '捷徑', treasure: '藏寶處', nest: '巢穴' };
   var ROLE_INK = { shortcut: '#1f5fa8', treasure: '#8a5f00', nest: '#7a2aa8' };
   var SITE_KIND_NAME = { bridge: '斷橋', stairs: '崩梯', rubble: '堵塞隧道', nestgate: '巢穴門' };
   var ITEMS = ['bagWood', 'bagStone', 'bagCrystal', 'coreLamp', 'glove', 'horn', 'heart', 'gear'];
@@ -1089,13 +1091,20 @@
       stripes(ctx, lx, y - 24, lw, 24, -t * 30 * dir);
       ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = 'rgba(255,90,70,0.85)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(lx, y - 24); ctx.lineTo(lx + lw, y - 24); ctx.stroke(); ctx.restore();
       ctx.fillStyle = 'rgba(255,110,90,0.9)';
-      for (i = 0; i < 3; i++) { var ax = x + dir * (18 + i * 14 + ((t * 40) % 14)); if ((ax - x) * dir > lw - 6) continue; poly(ctx, [ax, y - 18, ax + dir * 7, y - 12, ax, y - 6, ax + dir * 3, y - 12]); ctx.fill(); }
+      // 前進箭頭的尖端(ax + dir*7)不超過 x2(端點已由 RD 截在牆面 / 平台邊緣)
+      for (i = 0; i < 3; i++) { var ax = x + dir * (18 + i * 14 + ((t * 40) % 14)); if ((ax - x) * dir > lw - 8) continue; poly(ctx, [ax, y - 18, ax + dir * 7, y - 12, ax, y - 6, ax + dir * 3, y - 12]); ctx.fill(); }
     } else if (kind === 'aim') {
-      ctx.save(); ctx.setLineDash([2, 5]); ctx.lineDashOffset = -t * 20; ctx.strokeStyle = 'rgba(255,70,50,0.9)'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
-      reticle(ctx, x2, y2, 10);
+      // 準星整顆收在端點以內: 準星外緣剛好碰到 (x2,y2), 線畫到準星為止
+      var aL = Math.hypot(x2 - x, y2 - y), aR = Math.min(10, aL / 2), aux = aL > 0 ? (x2 - x) / aL : 0, auy = aL > 0 ? (y2 - y) / aL : 0;
+      var rcx = x2 - aux * aR, rcy = y2 - auy * aR;
+      ctx.save(); ctx.setLineDash([2, 5]); ctx.lineDashOffset = -t * 20; ctx.strokeStyle = 'rgba(255,70,50,0.9)'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(rcx, rcy); ctx.stroke(); ctx.restore();
+      if (aR > 1) reticle(ctx, rcx, rcy, aR);
     } else if (kind === 'dive') {
-      ctx.save(); ctx.setLineDash([7, 5]); ctx.lineDashOffset = -t * 30; ctx.strokeStyle = 'rgba(255,90,70,0.9)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,70,50,0.95)'; ctx.beginPath(); ctx.moveTo(x2 - 8.5, y2 - 8.5); ctx.lineTo(x2 + 8.5, y2 + 8.5); ctx.moveTo(x2 + 8.5, y2 - 8.5); ctx.lineTo(x2 - 8.5, y2 + 8.5); ctx.stroke();
+      // 終點十字整個收在端點以內(十字半對角 ≈ 12 往回退)
+      var dL = Math.hypot(x2 - x, y2 - y), dR = Math.min(8.5, dL / 3), dB = dR * 1.42, dux = dL > 0 ? (x2 - x) / dL : 0, duy = dL > 0 ? (y2 - y) / dL : 0;
+      var dcx = x2 - dux * dB, dcy = y2 - duy * dB;
+      ctx.save(); ctx.setLineDash([7, 5]); ctx.lineDashOffset = -t * 30; ctx.strokeStyle = 'rgba(255,90,70,0.9)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(dcx, dcy); ctx.stroke(); ctx.restore();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,70,50,0.95)'; ctx.beginPath(); ctx.moveTo(dcx - dR, dcy - dR); ctx.lineTo(dcx + dR, dcy + dR); ctx.moveTo(dcx + dR, dcy - dR); ctx.lineTo(dcx - dR, dcy + dR); ctx.stroke();
     } else if (kind === 'column') {
       var top = Math.min(y, y2), bot = Math.max(y, y2);
       stripes(ctx, x - w / 2, top, w, Math.max(0, bot - top - w / 8), t * 20);
@@ -1126,7 +1135,7 @@
       for (i = 0; i < 3; i++) { var u = fr(t * 1.5 + i / 3); ctx.fillStyle = 'rgba(200,160,130,' + (0.6 * (1 - u)).toFixed(3) + ')'; circle(ctx, x + (i - 1) * w / 4, y - u * 22, 4 + u * 5); ctx.fill(); }
     } else { // path 光束路線
       var d = x2 >= x ? 1 : -1;
-      ctx.save(); ctx.setLineDash([10, 6]); ctx.lineDashOffset = -t * 60 * d; ctx.strokeStyle = 'rgba(255,90,70,0.95)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.setLineDash([10, 6]); ctx.lineDashOffset = -t * 60 * d; ctx.strokeStyle = 'rgba(255,90,70,0.95)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2 - d * 1.5, y); ctx.stroke(); ctx.restore(); // 圓頭線帽不超出端點
       arrowHead(ctx, x2, y, d > 0 ? 0 : Math.PI, 12);
       var span = Math.abs(x2 - x);
       for (i = 0; i < 5; i++) { var mx = x + d * fr(i / 5 + t * 0.5) * span; arrowHead(ctx, mx, y, d > 0 ? 0 : Math.PI, 8); }
@@ -1243,6 +1252,8 @@
     var big = st.big === true, weak = st.weak === true;
     var Wd = Math.min(96, Math.max(16, 6 * tot + 4)), hh = big ? 7 : 5, x0 = x - Wd / 2, y0 = y - hh, u = Wd / tot;
     ctx.save();
+    // 盾值段畫在盾牌那一側: 有傳 shieldSide=1(盾在右)時左右翻轉, 預設盾值在左
+    if (st.shieldSide === 1) { ctx.translate(x, 0); ctx.scale(-1, 1); ctx.translate(-x, 0); }
     rr(ctx, x0, y0, Wd, hh, hh / 2); ctx.fillStyle = 'rgba(10,6,14,0.82)'; ctx.fill();
     ctx.save(); rr(ctx, x0, y0, Wd, hh, hh / 2); ctx.clip();
     var lost = (chip - (hp + sh)) * (1 - cT / cDur);
@@ -1857,7 +1868,22 @@
   function drawBomb(ctx, st) {
     st = obj(st);
     var x = num(st.x, 0), y = num(st.y, 0), t = num(st.t, 0);
-    ctx.save(); ctx.translate(x, y); ctx.rotate(t * 6);
+    var R = clamp(num(st.radius, 60), 0, 64), danger = st.danger === true;
+    ctx.save();
+    // 爆炸範圍圈(polish 第 3 輪: 炸彈會炸到自己): 線畫在 radius 內側; 縮圖(radius 0 或縮放 < 0.2)不畫
+    if (R > 4 && scaleOf(ctx).rel >= SIL) {
+      ctx.save();
+      if (danger) {
+        var fl2 = 0.5 + 0.5 * Math.cos(t * TAU / 0.25); // 0.25 秒一閃
+        circle(ctx, x, y, R); ctx.fillStyle = 'rgba(255,60,50,' + (0.07 + 0.07 * fl2).toFixed(3) + ')'; ctx.fill();
+        circle(ctx, x, y, R - 1.2); ctx.lineWidth = 2.4; ctx.strokeStyle = 'rgba(255,74,58,' + (0.6 + 0.4 * fl2).toFixed(3) + ')'; ctx.stroke();
+      } else {
+        ctx.setLineDash([6, 5]); ctx.lineDashOffset = -t * 18;
+        circle(ctx, x, y, R - 1); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,240,215,0.35)'; ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.translate(x, y); ctx.rotate(t * 6);
     circle(ctx, 0, 1.5, 6); ctx.fillStyle = PAL.bomb; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = '#ffffff'; ctx.stroke();
     circle(ctx, -2, -0.5, 1.6); ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fill();
     ctx.strokeStyle = '#c8a070'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(2.5, -3); ctx.lineTo(4, -5); ctx.stroke();
@@ -1879,18 +1905,47 @@
     }
     ctx.restore();
   }
-  // 震波(玩家): 白色前緣細線 + 往外的小箭頭 + 極淡暖色面; 和火球、和敵方紅圈都分開
+  // 爆風擊退(玩家, polish 第 3 輪): 從身側往左右各推出一道爆風, 只在 left~right、y±halfH 的水平帶內;
+  // 白色弧形前緣 + 內側淡橘細線 + 往外的速度線與小箭頭 + 極淡暖色面。和火球、和敵方紅色、和舊的圓環都分開
   function drawShockwave(ctx, st) {
     st = obj(st);
-    var x = num(st.x, 0), y = num(st.y, 0), dur = Math.max(0.01, num(st.dur, 0.4)), p = clamp(num(st.t, 0) / dur, 0, 1), R = clamp(num(st.radius, 130), 1, 600);
-    var outer = Math.max(2, R * eOut(p)), lw = Math.min(outer, 10 * (1 - p) + 3);
+    var x = num(st.x, 0), y = num(st.y, 0), dur = Math.max(0.01, num(st.dur, 0.4)), p = clamp(num(st.t, 0) / dur, 0, 1);
+    var hh = clamp(num(st.halfH, 40), 4, 80);
+    var left = clamp(num(st.left, x - 130), x - 400, x), right = clamp(num(st.right, x + 130), x, x + 400);
+    var ep = eOut(p), i, side;
     ctx.save();
+    ctx.beginPath(); ctx.rect(left, y - hh, right - left, hh * 2); ctx.clip(); // 判定外緣 = 畫面外緣
     ctx.globalAlpha *= 1 - p * 0.7;
-    circle(ctx, x, y, outer); ctx.fillStyle = 'rgba(255,236,200,0.10)'; ctx.fill();
-    circle(ctx, x, y, outer - lw / 2); ctx.lineWidth = lw; ctx.strokeStyle = 'rgba(255,250,240,0.9)'; ctx.stroke();
-    circle(ctx, x, y, Math.max(0, outer - lw - 3)); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(242,140,40,0.65)'; ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    for (var i = 0; i < 8; i++) { var a = i * TAU / 8, rr2 = Math.max(0, outer - lw - 8); ctx.save(); ctx.translate(x + Math.cos(a) * rr2, y + Math.sin(a) * rr2); ctx.rotate(a); poly(ctx, [4, 0, -2, -3.5, -2, 3.5]); ctx.fill(); ctx.restore(); }
+    var simple = scaleOf(ctx).rel < SIL;
+    for (side = -1; side <= 1; side += 2) {
+      var L = side < 0 ? x - left : right - x; if (L < 1) continue;
+      var f = L * ep, fx = x + side * f;                 // 前緣(最外點)
+      var cut = L < 126;                                 // 這一側被牆截短
+      var sq = cut ? seg(p, 0.55, 1) : 0;                // 撞牆壓扁
+      var b = Math.min(f, 16 * (1 - 0.8 * sq));          // 弧形鼓出量
+      var fh = hh * (0.78 + 0.22 * sq);                  // 前緣半高(壓扁時撐到整條帶)
+      if (simple) { ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(255,250,240,0.9)'; ctx.beginPath(); ctx.moveTo(fx - side * 2, y - fh * 0.7); ctx.lineTo(fx - side * 2, y + fh * 0.7); ctx.stroke(); continue; }
+      // 極淡暖色面: 從身側到前緣
+      ctx.fillStyle = 'rgba(255,236,200,0.12)'; ctx.fillRect(Math.min(x, fx), y - fh, Math.abs(fx - x), fh * 2);
+      // 速度線(往外流動), 都在前緣之內
+      ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,250,240,0.55)'; ctx.lineWidth = 2;
+      for (i = 0; i < 5; i++) {
+        var ly = y + (i - 2) * fh * 0.36, ln = Math.min(f - b, 18 + 10 * hash(i, side + 3)), ls = Math.max(0, f - b - 4 - ln - 6 * hash(i, 7));
+        if (ln < 3) continue;
+        ctx.beginPath(); ctx.moveTo(x + side * ls, ly); ctx.lineTo(x + side * (ls + ln), ly); ctx.stroke();
+      }
+      // 弧形前緣(白粗線 + 內側淡橘細線)
+      var lw = 7 * (1 - p) + 3;
+      ctx.beginPath(); ctx.moveTo(fx - side * b, y - fh); ctx.quadraticCurveTo(fx + side * b * 0.9 - side * lw / 2, y, fx - side * b, y + fh);
+      ctx.lineWidth = lw; ctx.strokeStyle = 'rgba(255,250,240,0.92)'; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(fx - side * (b + lw + 2), y - fh * 0.85); ctx.quadraticCurveTo(fx - side * (lw + 4) + side * b * 0.5, y, fx - side * (b + lw + 2), y + fh * 0.85);
+      ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(242,140,40,0.7)'; ctx.stroke();
+      // 往外的小箭頭(兩顆, 前緣後方)
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      for (i = -1; i <= 1; i += 2) { var axx = fx - side * (b + lw + 10); if ((axx - x) * side < 6) continue; poly(ctx, [axx + side * 5, y + i * fh * 0.42, axx - side * 3, y + i * fh * 0.42 - 4, axx - side * 3, y + i * fh * 0.42 + 4]); ctx.fill(); }
+      // 撞牆: 牆面一道亮白閃
+      if (sq > 0) { ctx.fillStyle = 'rgba(255,250,235,' + (0.8 * (1 - sq * 0.6)).toFixed(3) + ')'; ctx.fillRect(side < 0 ? left : right - 3, y - hh, 3, hh * 2); }
+    }
     ctx.restore();
   }
   function drawPoof(ctx, st) {
@@ -2408,14 +2463,14 @@
     }
     if (st.newArea === true) newAreaChip(ctx, 684, ry + 20, 'right', '修好後還沒跑過', 11);
     // 右側三列(工程 / 裝置格 / 開始挑戰; 商店已搬到大地圖營地)
-    groove(ctx, 720, 96, 480, 180, '修工程', row === 0);
+    groove(ctx, 720, 96, 480, 180, '修復工程', row === 0);
     if (!sites.length) text(ctx, '本關沒有工程', 960, 192, 18, K.labelDim, 'center', true, 3, K.edge);
     else for (i = 0; i < sites.length; i++) siteCard(ctx, sites[i], i, 728 + 158 * i, 128, i === siteSel, row === 0, stock);
     groove(ctx, 720, 286, 480, 120, '裝置格', row === 1);
     for (i = 0; i < 2; i++) {
       var it = slots[i], ox = 728 + 238 * i, sel = i === slotSel, has = ITEMS.indexOf(it) >= 0;
       var y2 = tag(ctx, ox, 310, 230, 88, sel ? (row === 1 ? 'hot' : 'cold') : null, 'normal');
-      text(ctx, (i + 1) + ' 號格', ox + 8, y2 + 12, 11, K.inkDim, 'left', true);
+      // polish 第 3 輪: 格內不畫「N 號格」, 1 號 / 2 號只靠左右位置區分
       if (has) {
         itemIcon(ctx, it, ox + 30, y2 + 50, 40);
         text(ctx, ITEM_NAME[it], ox + 56, y2 + 40, 15, K.ink, 'left', true);
@@ -2572,7 +2627,7 @@
         text(ctx, '剩 ' + left, 992, ty + 25.5, 14, K.ink, 'right', true);
       }
     }
-    keyRow(ctx, [['↑↓', '選擇'], ['Z', '買下'], ['X', '返回']], 272, 568, 13, 'left');
+    keyRow(ctx, [['↑↓', '選擇'], ['Z', '購買'], ['X', '返回']], 272, 568, 13, 'left');
     ctx.restore();
   }
   function heroBig(ctx, cls, cx, cy, k, alpha) {
@@ -2585,7 +2640,7 @@
     ctx.save();
     dimScreen(ctx, 0.55);
     board(ctx, 290, 200, 700, 320);
-    text(ctx, '選擇出戰職業', 316, 226, 20, K.cream, 'left', true, 4, K.edge);
+    text(ctx, '選擇職業', 316, 226, 20, K.cream, 'left', true, 4, K.edge);
     for (i = 0; i < 3; i++) {
       var c = obj(classes[i]), cls = oneOf(c.cls, CLS, CLS[i]), owned = c.owned === true, isSel = i === sel, x = 316 + 224 * i;
       var ty = tag(ctx, x, 250, 200, 220, isSel ? 'hot' : null, owned ? 'normal' : 'dim');
@@ -2593,9 +2648,10 @@
       heroBig(ctx, cls, x + 100, ty + 67, 2.5, owned ? 1 : 0.35);
       if (!owned) lockIcon(ctx, x + 100, ty + 70, 34, '#4a3e2e');
       text(ctx, CLS_NAME[cls], x + 100, ty + 136, 20, owned ? K.ink : '#5e5240', 'center', true);
-      text(ctx, '擅長: ' + CLS_GOOD[cls], x + 100, ty + 162, 13, K.inkDim, 'center', true);
-      if (!owned) text(ctx, '到升級所解鎖', x + 100, ty + 192, 13, '#8a3a1a', 'center', true);
-      else if (isSel) act(ctx, 'Z 出發', x + 100, ty + 194, 'hot', 'center', 14);
+      text(ctx, '特性: ' + CLS_TRAIT[cls], x + 100, ty + 158, 13, K.inkDim, 'center', true);
+      text(ctx, '技能: ' + CLS_SKILL[cls], x + 100, ty + 178, 13, K.inkDim, 'center', true);
+      if (!owned) text(ctx, '到升級所解鎖', x + 100, ty + 202, 13, '#8a3a1a', 'center', true);
+      else if (isSel) act(ctx, 'Z 出發', x + 100, ty + 202, 'hot', 'center', 14);
     }
     keyRow(ctx, [['←→', '選擇'], ['Z', '出發'], ['X', '返回']], 316, 498, 13, 'left');
     ctx.restore();
@@ -2633,8 +2689,8 @@
     ctx.restore();
   }
   function eIn3(p) { p = clamp(p, 0, 1); return p * p * p; }
-  var STAT_NAME = { speed: '移速', hp: '血量', cd: '技能冷卻', atk: '攻擊傷害' };
-  var STAT_FX = { speed: ['+0%', '+8%', '+16%', '+24%'], hp: ['3', '4', '5'], cd: ['-0%', '-15%', '-30%', '-45%'], atk: ['+0', '+1', '+2'] };
+  var STAT_NAME = { speed: '移動速度', hp: '血量', cd: '技能冷卻', atk: '攻擊傷害' };
+  var STAT_FX = { speed: ['+0%', '+8%', '+16%', '+24%'], hp: ['3', '4', '5', '6'], cd: ['-0%', '-15%', '-30%', '-45%'], atk: ['+0', '+1', '+2', '+3'] }; // polish 第 3 輪: 四項都 3 階
   var STAT_KEYS = ['speed', 'hp', 'cd', 'atk'], STAT_Y = [262, 352, 442, 532];
   var HERO_K = 2.1; // 職業卡角色倍率; 腳底 = 卡片頂 + 94
   function drawUpgradePage(ctx, st) {
@@ -2658,10 +2714,11 @@
       if (fxHere) fx = { cls: cls, x: x, ty: ty, hx: hx, foot: foot };
       else heroCard(ctx, cls, hx, foot, HERO_K, owned ? 'color' : 'gray');
       if (!owned) lockOpen(ctx, hx, ty + 58, 30, '#4a3e2e', 0, 0);
-      text(ctx, CLS_NAME[cls], x + 104, ty + 30, 20, owned ? K.ink : '#5e5240', 'left', true);
-      text(ctx, '擅長: ' + CLS_GOOD[cls], x + 104, ty + 56, 13, K.inkDim, 'left', true);
+      text(ctx, CLS_NAME[cls], x + 104, ty + 26, 20, owned ? K.ink : '#5e5240', 'left', true);
+      text(ctx, '特性: ' + CLS_TRAIT[cls], x + 104, ty + 50, 13, K.inkDim, 'left', true);
+      text(ctx, '技能: ' + CLS_SKILL[cls], x + 104, ty + 70, 13, K.inkDim, 'left', true);
       if (owned) { if (!fxHere) unlockedStamp(ctx, x + 440, ty + 58, 1, 1); }
-      else { var c = costLine(ctx, rc.cost, stock, x + 104, ty + 88, 15, 'left'); act(ctx, 'Z 解鎖', x + 514, ty + 88, c.ok ? (isSel && row === 0 ? 'hot' : 'idle') : 'off', 'right', 13); }
+      else { var c = costLine(ctx, rc.cost, stock, x + 104, ty + 96, 15, 'left'); act(ctx, 'Z 解鎖', x + 514, ty + 96, c.ok ? (isSel && row === 0 ? 'hot' : 'idle') : 'off', 'right', 13); }
     }
     for (i = 0; i < 4; i++) {
       var s = obj(stats[i]), key = oneOf(s.key, STAT_KEYS, STAT_KEYS[i]), maxLv = Math.round(clamp(num(s.maxLv, STAT_FX[key].length - 1), 1, 9)), lv = Math.round(clamp(num(s.lv, 0), 0, maxLv));
@@ -3016,17 +3073,21 @@
 
   // ================= 開始畫面(title 方案 B 關卡之輪; 中央換成倉庫) =================
   // 循環 4 秒: 光點每 4 秒繞一圈、每 0.5 秒掃過一枚窗; 所有週期取 4 秒的因數(標題字呼吸 1.2 秒照規格)
-  var TT = { CX: 640, CY: 340, R: 265, WR: 44, N: 8, FLY: 0.85, DOOR: [640, 478] };
+  // polish 第 3 輪: 主視覺縮小約 0.8 倍並上移(中心 (640,340) → (640,300)); 整組動畫含窗光暈與彈跳收在 y 54~552。
+  // 規格寫環道半徑 210、窗直徑 72, 但頂端窗 300−210−36 = 54 已貼上限, 再加窗的外框 / 光暈 / 彈跳必超出 → 環道 200、窗直徑 70(見 style.md 判讀約定)
+  var TT = { CX: 640, CY: 300, R: 200, WR: 35, N: 8, FLY: 0.85, DOOR: [640, 394], WH: 0.8 };
+  var TWK = TT.WR / 44; // 窗內畫面沿用上一版以半徑 44 設計的座標, 整體乘這個倍率
   var TSLOT = ['salt', 'forest', 'forest', 'forest', 'cliff', 'cliff', 'mine', 'mine'];
   var TMAT = { salt: 'core', forest: 'wood', cliff: 'stone', mine: 'crystal' };
   var TCLS = ['sword', 'sword', 'hunter', 'bomber', 'hunter', 'sword', 'bomber', 'hunter'];
   function tSlotPos(i) { var a = -Math.PI / 2 + i * TAU / TT.N; return [TT.CX + Math.cos(a) * TT.R, TT.CY + Math.sin(a) * TT.R]; }
   function tSince(p, i) { return fr(p - i / TT.N) * 4; }
   function titleWindow(ctx, i, p) {
-    var th = TSLOT[i], pos = tSlotPos(i), d = tSince(p, i), WR = TT.WR;
-    var ping = d < 0.5 ? 1 - d / 0.5 : 0, bump = 1 + 0.1 * Math.sin(Math.PI * clamp(d / 0.3, 0, 1));
-    ctx.save(); ctx.translate(pos[0], pos[1]); ctx.scale(bump, bump);
-    if (ping > 0) { circle(ctx, 0, 0, WR + 30); ctx.fillStyle = rad(ctx, 0, 0, WR, WR + 30, [0, 'rgba(255,214,90,' + (0.55 * ping).toFixed(3) + ')', 1, 'rgba(255,214,90,0)']); ctx.fill(); }
+    var th = TSLOT[i], pos = tSlotPos(i), d = tSince(p, i), WR = 44; // 窗內以半徑 44 的座標畫, 下面整體乘 TWK
+    var ping = d < 0.5 ? 1 - d / 0.5 : 0, bump = 1 + 0.06 * Math.sin(Math.PI * clamp(d / 0.3, 0, 1));
+    ctx.save(); ctx.translate(pos[0], pos[1]); ctx.scale(bump * TWK, bump * TWK);
+    // 光暈收窄到窗外 10 單位(畫面上約 8px), 頂端窗的光暈上緣仍 ≥ y 54
+    if (ping > 0) { circle(ctx, 0, 0, WR + 10); ctx.fillStyle = rad(ctx, 0, 0, WR, WR + 10, [0, 'rgba(255,214,90,' + (0.7 * ping).toFixed(3) + ')', 1, 'rgba(255,214,90,0)']); ctx.fill(); }
     circle(ctx, 0, 0, WR + 5); ctx.fillStyle = '#161220'; ctx.fill();
     ctx.save(); circle(ctx, 0, 0, WR); ctx.clip();
     var T = THEMES[th];
@@ -3063,6 +3124,8 @@
     var CX = 640, BOT = 500, i, bounce = 0;
     for (i = 0; i < TT.N; i++) { var d = tSince(p, i) - TT.FLY; if (d >= 0 && d < 0.25) bounce = Math.max(bounce, Math.sin(Math.PI * d / 0.25)); }
     var s = 1 + 0.04 * bounce;
+    // 整棟(含浮島)沿用上一版座標, 以上一版中心 (640,360) 縮 TT.WH 倍後移到 (640,300)
+    ctx.save(); ctx.translate(TT.CX, TT.CY); ctx.scale(TT.WH, TT.WH); ctx.translate(-640, -360);
     // 浮島
     ctx.beginPath(); ctx.moveTo(CX - 150, BOT); ctx.quadraticCurveTo(CX - 110, BOT + 56, CX, BOT + 72); ctx.quadraticCurveTo(CX + 110, BOT + 56, CX + 150, BOT); ctx.closePath();
     ctx.fillStyle = lin(ctx, 0, BOT, 0, BOT + 72, [0, '#6b4a34', 1, '#2e1f18']); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#161008'; ctx.stroke();
@@ -3096,6 +3159,7 @@
     ctx.fillStyle = rad(ctx, 640, 480, 4, 70, [0, 'rgba(255,214,90,0.35)', 1, 'rgba(255,214,90,0)']); ctx.fillRect(570, 420, 140, 90);
     for (i = 0; i < n; i++) matIcon(ctx, HEAP[i][0], 640 + HEAP[i][1], 486 + HEAP[i][2], 24);
     ctx.restore();
+    ctx.restore();
   }
   function drawTitle(ctx, st) {
     st = obj(st);
@@ -3107,23 +3171,23 @@
     ctx.restore();
     for (i = 0; i < 70; i++) { var tw2 = 0.5 + 0.5 * Math.sin(p * TAU * (1 + (i % 3)) + i * 2.3); ctx.fillStyle = 'rgba(255,255,255,' + (0.1 + 0.25 * tw2).toFixed(3) + ')'; circle(ctx, hash(i, 4) * W, hash(i, 5) * H, 0.8 + hash(i, 6) * 1.2); ctx.fill(); }
     // 金色環道 + 光點
-    circle(ctx, TT.CX, TT.CY, TT.R); ctx.lineWidth = 30; ctx.strokeStyle = '#161220'; ctx.stroke();
-    ctx.lineWidth = 24; ctx.strokeStyle = '#2c2438'; ctx.stroke();
-    ctx.save(); ctx.beginPath(); ctx.arc(TT.CX, TT.CY, TT.R, -Math.PI / 2, -Math.PI / 2 + TAU); ctx.setLineDash([10, 18]); ctx.lineDashOffset = -p * 28 * 20; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(242,201,76,0.45)'; ctx.stroke(); ctx.restore();
+    circle(ctx, TT.CX, TT.CY, TT.R); ctx.lineWidth = 24; ctx.strokeStyle = '#161220'; ctx.stroke();
+    ctx.lineWidth = 19; ctx.strokeStyle = '#2c2438'; ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.arc(TT.CX, TT.CY, TT.R, -Math.PI / 2, -Math.PI / 2 + TAU); ctx.setLineDash([8, 14]); ctx.lineDashOffset = -p * 22 * 20; ctx.lineWidth = 3.2; ctx.strokeStyle = 'rgba(242,201,76,0.45)'; ctx.stroke(); ctx.restore();
     var ac = -Math.PI / 2 + p * TAU;
-    for (i = 0; i < 16; i++) { var a0 = ac - 1.1 * (1 - i / 16), a1 = ac - 1.1 * (1 - (i + 1) / 16); ctx.beginPath(); ctx.arc(TT.CX, TT.CY, TT.R, a0, a1); ctx.lineWidth = 6 + 10 * (i / 16); ctx.strokeStyle = 'rgba(255,214,90,' + (0.06 + 0.5 * (i / 16)).toFixed(3) + ')'; ctx.stroke(); }
+    for (i = 0; i < 16; i++) { var a0 = ac - 1.1 * (1 - i / 16), a1 = ac - 1.1 * (1 - (i + 1) / 16); ctx.beginPath(); ctx.arc(TT.CX, TT.CY, TT.R, a0, a1); ctx.lineWidth = 5 + 8 * (i / 16); ctx.strokeStyle = 'rgba(255,214,90,' + (0.06 + 0.5 * (i / 16)).toFixed(3) + ')'; ctx.stroke(); }
     for (i = 0; i < TT.N; i++) titleWindow(ctx, i, p);
     var hx = TT.CX + Math.cos(ac) * TT.R, hy = TT.CY + Math.sin(ac) * TT.R;
-    circle(ctx, hx, hy, 30); ctx.fillStyle = rad(ctx, hx, hy, 0, 30, [0, 'rgba(255,248,210,0.95)', 0.35, 'rgba(255,214,90,0.6)', 1, 'rgba(255,214,90,0)']); ctx.fill();
-    circle(ctx, hx, hy, 8); ctx.fillStyle = '#fffbe8'; ctx.fill();
+    circle(ctx, hx, hy, 24); ctx.fillStyle = rad(ctx, hx, hy, 0, 24, [0, 'rgba(255,248,210,0.95)', 0.35, 'rgba(255,214,90,0.6)', 1, 'rgba(255,214,90,0)']); ctx.fill();
+    circle(ctx, hx, hy, 6.5); ctx.fillStyle = '#fffbe8'; ctx.fill();
     warehouse(ctx, p);
     // 素材沿弧線落進倉庫大門
     for (i = 0; i < TT.N; i++) {
       var pos = tSlotPos(i), mat = TMAT[TSLOT[i]];
       for (var j = 0; j < 3; j++) {
         var d = tSince(p, i) - j * 0.06; if (d < 0 || d >= TT.FLY) continue;
-        var u = d / TT.FLY, tg = [TT.DOOR[0] + (j - 1) * 22, TT.DOOR[1]], mx = (pos[0] + tg[0]) / 2 + (j - 1) * 40, my = Math.min(pos[1], tg[1]) - 120, v = 1 - u;
-        matIcon(ctx, mat, v * v * pos[0] + 2 * v * u * mx + u * u * tg[0], v * v * pos[1] + 2 * v * u * my + u * u * tg[1], 22);
+        var u = d / TT.FLY, tg = [TT.DOOR[0] + (j - 1) * 18, TT.DOOR[1]], mx = (pos[0] + tg[0]) / 2 + (j - 1) * 32, my = Math.min(pos[1], tg[1]) - 96, v = 1 - u;
+        matIcon(ctx, mat, v * v * pos[0] + 2 * v * u * mx + u * u * tg[0], v * v * pos[1] + 2 * v * u * my + u * u * tg[1], 18);
       }
     }
     var s = st.touch === true ? '點擊畫面開始遊戲' : '按任意按鍵開始遊戲';

@@ -2,7 +2,9 @@
 var W = (window.Art && Art.canvas && Art.canvas.width) || 1280, H = (window.Art && Art.canvas && Art.canvas.height) || 720;
 var TS = 40, GW = 32, GH = 18, DT = 1 / 60;
 var KINDS = ['wood', 'stone', 'crystal', 'core'];
-var GRAV = 2400, JUMP_V = 720;
+// JUMP_V 是炸彈工的跳躍初速(關卡編輯器可達檢查讀它, 名稱與值不改); 劍士、獵人用 JUMP_V_HI(規則 42)
+var GRAV = 2400, JUMP_V = 720, JUMP_V_HI = 850;
+function jumpV(cls) { return cls === 'bomber' ? JUMP_V : JUMP_V_HI; }
 var PW = 28, PH = 36;
 
 // 規格與 interface 都沒有、需要的圖形: 集中在這裡(目前沒有需要的)
@@ -20,8 +22,8 @@ var UNLOCK_COST = [0, 20, 20, 50, 50, 50, 50, 0];
 var PARENTS = [[], [0], [0], [1], [1], [2], [2], [3, 4, 5, 6]];
 // 關卡卡片 0~7; 營地建築卡 8 = 升級所、9 = 商店
 var CARD_POS = [[392, 281], [616, 131], [616, 431], [840, 56], [840, 206], [840, 356], [840, 506], [1064, 281], [62, 150], [62, 430]];
-var UP_SPEED = [1, 1.08, 1.16, 1.24], UP_CD = [1, 0.85, 0.7, 0.55], UP_HP = [3, 4, 5];
-var SPEED_COST = [8, 20, 45], HP_COST = [12, 35], CD_COST = [8, 20, 45], ATK_COST = [15, 40];
+var UP_SPEED = [1, 1.08, 1.16, 1.24], UP_CD = [1, 0.85, 0.7, 0.55], UP_HP = [3, 4, 5, 6];
+var SPEED_COST = [8, 20, 45], HP_COST = [12, 35, 65], CD_COST = [8, 20, 45], ATK_COST = [15, 40, 75];
 var RECRUIT_COST = 30;
 var CLS = { sword: { speed: 260 }, hunter: { speed: 270 }, bomber: { speed: 230 } };
 var CLS_LIST = ['sword', 'hunter', 'bomber'];
@@ -46,125 +48,17 @@ var MDEF = {
 var MOTHER_DROP = { forest: 'wood', cliff: 'stone', mine: 'crystal' };
 
 // ---------------------------------------------------------------- 關卡資料
-// rects: ['B'|'L'|'E', c, r, w, h](B 實心、L 巢穴實心、E 清空); 物件格座標 [c, r]
-// picks [kind, c, r, dx?]; mons [type, c, 站立地面列或飛行格列, extra?]; 站立地面列 = 腳踩的那列頂面
-function rowCells(c0, n, r) { var a = [], i; for (i = 0; i < n; i++) a.push([c0 + i, r]); return a; }
-// 懸空階梯: 第 1 階(1 格厚, 離地 2 格)起每階 2 格高、2 格寬, 全部懸在主路上方; 最後一階頂面在第 7 列
-function stairsCells(c0, walk) {
-  var a = [[c0, 13], [c0 + 1, 13]], i, k;
-  for (i = 1; i <= 3; i++) {
-    var top = 13 - 2 * i;
-    for (k = 0; k < 2; k++) { a.push([c0 + 2 * i + k, top]); a.push([c0 + 2 * i + k, top + 1]); }
-  }
-  (walk || []).forEach(function (c) { a.push([Array.isArray(c) ? c[0] : c, 7]); });
-  return a;
-}
-var GROUND = ['B', 0, 15, 32, 3];
-// 左側巢洞(斷橋 + 寶區): 洞頂第 11 列, 空地 8 格(深淵), 洞盡頭是寶區小房間
-var CAVE_L = [['B', 0, 12, 14, 1], ['B', 0, 12, 1, 3], ['E', 4, 15, 8, 3]];
-var LEVEL_DEFS = [
-  // 1 林間小徑
-  { rects: [GROUND].concat(CAVE_L, [['E', 18, 15, 6, 2], ['B', 23, 16, 1, 1], ['B', 27, 11, 5, 4], ['E', 28, 12, 3, 3], ['E', 27, 13, 1, 2]]),
-    sites: [
-      { kind: 'rubble', role: 'treasure', cells: [[27, 13], [27, 14]], sign: [26, 15], fog: [[28, 12, 3, 3]] },
-      { kind: 'stairs', role: 'shortcut', cells: stairsCells(16, [24]), sign: [14, 15], fog: [] },
-      { kind: 'bridge', role: 'treasure', cells: rowCells(4, 8, 15), sign: [12, 15], fog: [[1, 13, 3, 2]] }],
-    start: [15, 15], goal: [25, 15], spikes: [], cracks: [],
-    picks: [['wood', 25, 14, -10], ['wood', 25, 14, 0], ['wood', 25, 14, 10], ['wood', 12, 14], ['wood', 13, 14], ['wood', 24, 14], ['wood', 26, 14], ['wood', 18, 16],
-      ['stone', 19, 16], ['stone', 20, 16], ['stone', 21, 16], ['crystal', 22, 16],
-      ['crystal', 1, 14], ['crystal', 2, 14], ['crystal', 3, 14],
-      ['wood', 29, 14], ['wood', 30, 14], ['wood', 30, 13], ['stone', 29, 13], ['stone', 29, 12]],
-    mons: [['frog', 24, 15], ['frog', 26, 15], ['boar', 20, 17], ['bee', 2, 13], ['frog', 29, 15]],
-    chest: [28, 15, 'bagWood'] },
-  // 2 藤蔓斜坡
-  { rects: [GROUND].concat(CAVE_L, [['B', 20, 13, 2, 1]]),
-    sites: [
-      { kind: 'stairs', role: 'shortcut', cells: stairsCells(16, [24, 25]), sign: [14, 15], fog: [] },
-      { kind: 'bridge', role: 'treasure', cells: rowCells(4, 8, 15), sign: [12, 15], fog: [[1, 13, 3, 2]] },
-      { kind: 'rubble', role: 'shortcut', cells: [[20, 14], [21, 14]], sign: [19, 15], fog: [] }],
-    start: [15, 15], goal: [27, 15], spikes: [[23, 14], [25, 14]], cracks: [],
-    picks: [['wood', 12, 14], ['wood', 13, 14], ['wood', 18, 14], ['wood', 22, 14], ['wood', 26, 14], ['wood', 28, 14], ['stone', 17, 14], ['stone', 24, 14],
-      ['crystal', 17, 12], ['crystal', 19, 14], ['crystal', 23, 12],
-      ['crystal', 1, 14], ['crystal', 3, 14], ['crystal', 1, 13], ['crystal', 3, 13]],
-    mons: [['thorn', 18, 15], ['thorn', 24, 15], ['bee', 17, 11], ['bee', 26, 10], ['frog', 29, 15], ['bee', 2, 13]],
-    chest: [2, 15, 'glove'] },
-  // 3 野豬谷地
-  { rects: [GROUND, ['L', 17, 10, 15, 5], ['E', 19, 11, 12, 4], ['E', 17, 13, 2, 2], ['B', 8, 13, 2, 1]],
-    sites: [
-      { kind: 'rubble', role: 'shortcut', cells: [[8, 14], [9, 14]], sign: [7, 15], fog: [] },
-      { kind: 'stairs', role: 'treasure', cells: stairsCells(2, rowCells(10, 6, 7)), sign: [0, 15], fog: [[10, 4, 6, 3]] },
-      { kind: 'nestgate', role: 'nest', cells: [], gate: [17, 13], lair: [19, 11, 12, 4], sign: [16, 15], fog: [[19, 11, 12, 4]] }],
-    start: [1, 15], goal: [15, 15], spikes: [[7, 14], [13, 14]], cracks: [],
-    picks: [['wood', 3, 14], ['wood', 5, 14], ['wood', 6, 14], ['wood', 11, 14], ['wood', 12, 14], ['wood', 14, 14], ['stone', 4, 14], ['stone', 10, 14], ['stone', 16, 14], ['crystal', 12, 12],
-      ['stone', 11, 6], ['stone', 12, 6], ['stone', 13, 6], ['stone', 14, 6]],
-    mons: [['boar', 5, 15], ['boar', 12, 15], ['boar', 13, 7], ['thorn', 14, 15], ['frog', 4, 15], ['frog', 10, 15],
-      ['mother', 25, 15, 'forest'], ['boar', 22, 15], ['boar', 28, 15], ['frog', 20, 15]],
-    chest: [15, 7, 'bagStone'] },
-  // 4 岩柱塔
-  { rects: [GROUND].concat(CAVE_L, [['E', 17, 15, 6, 2], ['B', 22, 16, 1, 1], ['B', 26, 11, 6, 4], ['E', 27, 12, 4, 3], ['E', 26, 13, 1, 2]]),
-    sites: [
-      { kind: 'stairs', role: 'shortcut', cells: stairsCells(15, [23]), sign: [13, 15], fog: [] },
-      { kind: 'rubble', role: 'treasure', cells: [[26, 13], [26, 14]], sign: [25, 15], fog: [[27, 12, 4, 3]] },
-      { kind: 'bridge', role: 'treasure', cells: rowCells(4, 8, 15), sign: [12, 15], fog: [[1, 13, 3, 2]] }],
-    start: [14, 15], goal: [24, 15], spikes: [[17, 14], [23, 14], [25, 14]], cracks: [],
-    picks: [['wood', 12, 14], ['wood', 13, 14], ['stone', 18, 16], ['stone', 19, 16], ['stone', 20, 16], ['stone', 21, 16], ['stone', 24, 14], ['crystal', 14, 12], ['crystal', 20, 12], ['crystal', 22, 12],
-      ['crystal', 1, 14], ['crystal', 2, 14], ['crystal', 3, 14], ['crystal', 3, 13],
-      ['wood', 28, 14], ['wood', 29, 14], ['stone', 27, 14], ['stone', 27, 13], ['stone', 29, 13], ['crystal', 30, 13]],
-    mons: [['ram', 19, 17], ['ram', 24, 15], ['hawk', 15, 10], ['hawk', 21, 9], ['hawk', 18, 8], ['hawk', 2, 13], ['hawk', 3, 13], ['lizard', 28, 11], ['ram', 29, 15]],
-    chest: [30, 15, 'bagCrystal'] },
-  // 5 吊橋峽谷
-  { rects: [GROUND, ['E', 3, 15, 6, 2], ['B', 8, 16, 1, 1], ['E', 11, 15, 6, 2], ['B', 16, 16, 1, 1], ['B', 9, 11, 2, 1],
-      ['L', 19, 10, 13, 5], ['E', 21, 11, 10, 4], ['E', 19, 13, 2, 2]],
-    sites: [
-      { kind: 'bridge', role: 'shortcut', cells: rowCells(3, 6, 15).concat(rowCells(11, 6, 15)), sign: [2, 15], fog: [] },
-      { kind: 'stairs', role: 'treasure', cells: stairsCells(4, rowCells(12, 6, 7)), sign: [1, 15], fog: [[12, 4, 6, 3]] },
-      { kind: 'nestgate', role: 'nest', cells: [], gate: [19, 13], lair: [21, 11, 10, 4], sign: [18, 15], fog: [[21, 11, 10, 4]] }],
-    start: [1, 15], goal: [17, 15], spikes: [[5, 16], [13, 16], [14, 16]], cracks: [],
-    picks: [['wood', 4, 16], ['wood', 12, 16], ['wood', 9, 14], ['wood', 10, 14], ['wood', 1, 14], ['wood', 18, 14], ['stone', 6, 16], ['stone', 7, 16], ['stone', 14, 16], ['stone', 15, 16], ['stone', 2, 14], ['stone', 17, 14],
-      ['crystal', 9, 12], ['crystal', 16, 12],
-      ['stone', 13, 6], ['stone', 14, 6], ['stone', 15, 6], ['crystal', 12, 6], ['crystal', 17, 6]],
-    mons: [['ram', 6, 17], ['ram', 13, 17], ['hawk', 10, 9], ['lizard', 9, 11], ['lizard', 10, 11], ['hawk', 14, 5],
-      ['mother', 26, 15, 'cliff'], ['ram', 23, 15], ['lizard', 24, 10], ['lizard', 28, 10]],
-    chest: [16, 7, 'horn'] },
-  // 6 礦車隧道
-  { rects: [GROUND].concat(CAVE_L, [['B', 19, 13, 2, 1], ['B', 29, 13, 1, 2]]),
-    sites: [
-      { kind: 'stairs', role: 'treasure', cells: stairsCells(16, rowCells(24, 6, 7)), sign: [14, 15], fog: [[24, 4, 6, 3]] },
-      { kind: 'rubble', role: 'shortcut', cells: [[19, 14], [20, 14]], sign: [18, 15], fog: [] },
-      { kind: 'bridge', role: 'treasure', cells: rowCells(4, 8, 15), sign: [12, 15], fog: [[1, 13, 3, 2]] }],
-    start: [15, 15], goal: [27, 15], spikes: [[22, 14], [25, 14]], cracks: [[29, 13], [29, 14]],
-    picks: [['wood', 12, 14], ['wood', 13, 14], ['stone', 18, 14], ['stone', 23, 14], ['stone', 24, 14], ['stone', 26, 14], ['crystal', 17, 12], ['crystal', 21, 12], ['crystal', 28, 14], ['crystal', 26, 12],
-      ['crystal', 1, 14], ['crystal', 2, 14], ['crystal', 3, 14], ['crystal', 2, 13], ['crystal', 1, 13],
-      ['stone', 25, 6], ['stone', 26, 6], ['stone', 27, 6], ['crystal', 28, 6], ['crystal', 29, 6], ['stone', 30, 14], ['stone', 31, 14]],
-    mons: [['shield', 22, 15], ['shield', 24, 15], ['shield', 26, 15], ['beetle', 18, 15], ['beetle', 28, 15], ['bats', 21, 10], ['bats', 2, 13], ['shield', 28, 7]],
-    chest: [29, 7, 'coreLamp'] },
-  // 7 晶礦深井
-  { rects: [GROUND, ['B', 0, 11, 10, 4], ['E', 1, 12, 8, 3], ['E', 9, 13, 1, 2], ['E', 12, 15, 6, 2], ['B', 17, 16, 1, 1],
-      ['L', 19, 10, 13, 5], ['E', 21, 11, 10, 4], ['E', 19, 13, 2, 2]],
-    sites: [
-      { kind: 'bridge', role: 'shortcut', cells: rowCells(12, 6, 15), sign: [11, 15], fog: [] },
-      { kind: 'rubble', role: 'treasure', cells: [[9, 13], [9, 14]], sign: [10, 15], fog: [[1, 12, 8, 3]] },
-      { kind: 'nestgate', role: 'nest', cells: [], gate: [19, 13], lair: [21, 11, 10, 4], sign: [18, 15], fog: [[21, 11, 10, 4]] }],
-    start: [11, 15], goal: [18, 15], spikes: [[11, 14]], cracks: [],
-    picks: [['wood', 13, 16], ['stone', 14, 16], ['stone', 15, 16], ['crystal', 16, 16], ['crystal', 14, 14], ['crystal', 15, 12],
-      ['wood', 2, 14], ['wood', 3, 14], ['stone', 4, 14], ['stone', 5, 14], ['crystal', 7, 14], ['crystal', 8, 14], ['crystal', 6, 13]],
-    mons: [['shield', 14, 17], ['shield', 15, 17], ['beetle', 13, 17], ['beetle', 16, 17], ['bats', 14, 10], ['bats', 16, 9], ['beetle', 11, 15],
-      ['beetle', 3, 15], ['beetle', 6, 15],
-      ['mother', 26, 15, 'mine'], ['beetle', 23, 15], ['beetle', 29, 15], ['shield', 24, 15]],
-    chest: [2, 15, 'gear'] },
-  // 8 鹽原斷門(Boss 競技場)
-  { rects: [GROUND, ['B', 3, 13, 4, 2], ['B', 25, 13, 4, 2], ['B', 8, 12, 2, 1], ['B', 22, 12, 2, 1], ['B', 11, 11, 10, 1], ['B', 11, 12, 1, 2], ['B', 20, 12, 1, 2],
-      ['B', 12, 10, 2, 1], ['B', 18, 10, 2, 1]],
-    sites: [], start: [2, 15], goal: [16, 15], spikes: [], cracks: [], picks: [], mons: [], chest: null }
-];
+// 地形與物件在 levels.js(window.LEVEL_DEFS, index.html 先載入), 由關卡編輯器 editor/index.html 編輯; 欄位格式見該檔開頭說明
+// tiles: GH 行 × GW 字("." 空、"#" 實心、"L" 巢穴實心); 物件格座標 [c, r]; mons 列的意思依種類不同(見 levels.js)
+var LEVEL_DEFS = window.LEVEL_DEFS || [];
 var LEVELS = [];
 function buildLevel(idx, d) {
   var g = [], r, c;
-  for (r = 0; r < GH; r++) g.push(new Array(GW).fill(0));
-  d.rects.forEach(function (q) {
-    var v = q[0] === 'B' ? 1 : (q[0] === 'L' ? 2 : 0);
-    for (var rr = q[2]; rr < q[2] + q[4]; rr++) for (var cc = q[1]; cc < q[1] + q[3]; cc++) if (rr >= 0 && rr < GH && cc >= 0 && cc < GW) g[rr][cc] = v;
-  });
+  for (r = 0; r < GH; r++) {
+    var row = (d.tiles && d.tiles[r]) || '';
+    g.push(new Array(GW).fill(0));
+    for (c = 0; c < GW; c++) { var ch = row.charAt(c); g[r][c] = ch === '#' ? 1 : (ch === 'L' ? 2 : 0); }
+  }
   var L = { idx: idx, name: LEVEL_NAMES[idx], theme: THEMES[idx], base: g, spikes: d.spikes, cracks: d.cracks, sites: [], lairs: [], picks: [], mons: [], chest: null, cave: null };
   d.sites.forEach(function (s, i) {
     var st = { kind: s.kind, role: s.role, cells: s.cells, sign: s.sign, fog: s.fog, cost: SITE_COST[idx][i], gate: null, lair: null };
@@ -380,6 +274,12 @@ function tutAppear(id) {
   }
   return ok;
 }
+// 第 1 關目前回放一圈有沒有木材(含裝置加成後每分鐘產量 > 0); 沒有回放視為沒有
+function level1HasWood() {
+  var rec = G.rec[0];
+  if (!rec) return false;
+  return rateOf(0, rec).wood > 0;
+}
 function shieldNear() {
   if (!R) return false;
   var p = R.p, f = false;
@@ -421,7 +321,7 @@ function tutStep(dt) {
 function keyLabel(k) { return k; }
 var STAGE_TEXT = {
   '1': ['按 Z 進入關卡', ['z']], '2': ['按 Z 開始挑戰', ['z']], '3': ['移動與跳躍', ['left', 'right', 'up']],
-  '4': ['按 Z 攻擊, 每打一下都掉素材', ['z']], '8': ['按 Z 修工程, 開出新區域', ['z']],
+  '4': ['按 Z 攻擊, 每打一下都掉素材', ['z']], '8': ['按 Z 修復工程, 開出新區域', ['z']],
   '12': ['← → 選職業, Z 出發', ['left', 'right', 'z']], '14': ['先打破盾牌', []], '15': ['發黃光時才打得動', []]
 };
 // 回傳 drawTutorial 的 state, 沒有就回 null
@@ -444,12 +344,13 @@ function tutView() {
       if (nm) s.tip = { x: nm.x, y: nm.y - nm.h / 2 - 17, dir: 'down' };
       break;
     case '5':
-      s.text = R.cls === 'sword' ? '按 X 衝刺斬' : (R.cls === 'hunter' ? '按 X 潛行' : '按 X 震波'); s.keys = ['x'];
+      s.text = R.cls === 'sword' ? '按 X 衝刺' : (R.cls === 'hunter' ? '按 X 潛行' : '按 X 爆風擊退'); s.keys = ['x'];
       banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 18 - 6, dir: 'down' }; break;
     case '7':
       banner(440, 648, 600, 40);
       if (G.stock.wood >= 20) { s.text = '木材夠了, 按 Z 解鎖新關卡'; s.keys = ['z']; s.tip = { x: 704, y: 127, dir: 'down' }; }
-      else { s.text = '過關的關卡會一直重播賺素材'; s.keys = []; s.tip = { x: 480, y: 277, dir: 'down' }; }
+      else if (level1HasWood()) { s.text = '過關的關卡會一直重播賺素材'; s.keys = []; s.tip = { x: 480, y: 277, dir: 'down' }; }
+      else { s.text = '這趟沒拿到木材, 按 Z 再跑一趟, 打怪撿木材'; s.keys = ['z']; s.tip = { x: 480, y: 277, dir: 'down' }; }
       break;
     case '8':
       txt1(STAGE_TEXT['8']); banner(60, 598, 640, 48);
@@ -460,7 +361,7 @@ function tutView() {
       break;
     case '10':
       if (G.screen === 'shop') {
-        s.text = '選一樣按 Z 買下'; s.keys = ['z']; banner(340, 612, 600, 48);
+        s.text = '選一樣按 Z 購買'; s.keys = ['z']; banner(340, 612, 600, 48);
         var fi = firstBuyableShopRow();
         if (fi >= 0) s.tip = { x: 268, y: 205 + 56 * fi, dir: 'right' };
       } else { s.text = '水晶可以在商店買裝置'; s.keys = ['z']; banner(440, 648, 600, 40); s.tip = { x: 150, y: 426, dir: 'down' }; }
@@ -474,8 +375,8 @@ function tutView() {
       break;
     case '12': txt1(STAGE_TEXT['12']); banner(340, 532, 600, 48); s.tip = { x: 416 + 224 * P.clsSel, y: 246, dir: 'down' }; break;
     case '13': s.text = '自動射箭, 按 X 潛行穿過怪物'; s.keys = ['x']; banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 24, dir: 'down' }; break;
-    case '13b': s.text = '按 Z 丟炸彈'; s.keys = ['z']; banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 24, dir: 'down' }; break;
-    case '13c': s.text = '按 X 震波擊飛'; s.keys = ['x']; banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 24, dir: 'down' }; break;
+    case '13b': s.text = '按 Z 丟炸彈, 紅圈內會炸到自己'; s.keys = ['z']; banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 24, dir: 'down' }; break;
+    case '13c': s.text = '按 X 爆風擊退'; s.keys = ['x']; banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 24, dir: 'down' }; break;
     case '14':
       txt1(STAGE_TEXT['14']); banner(340, 46, 600, 48);
       var sm = null, bd = 301;
@@ -549,13 +450,96 @@ function groundTopBelow(x, y) {
 }
 function groundTopFrom(x, y) { var g = groundTopBelow(x, y); return g === null ? 680 : g; }
 
+// ---- 地形擋線(規則 35a): 預告截斷、爆炸被牆擋住、爆風擊退帶
+// 從 (x1, y1) 朝 (x2, y2) 找第一個實心格, 回傳截斷後的終點(實心格之前最後一個自由點); 沒碰到回原終點
+function rayTrunc(x1, y1, x2, y2) {
+  var d = Math.hypot(x2 - x1, y2 - y1), n = Math.max(1, Math.ceil(d / 4)), i, lx = x1, ly = y1;
+  for (i = 1; i <= n; i++) {
+    var qx = x1 + (x2 - x1) * i / n, qy = y1 + (y2 - y1) * i / n;
+    if (isSol(SOL, Math.floor(qx / TS), Math.floor(qy / TS))) return { x: lx, y: ly };
+    lx = qx; ly = qy;
+  }
+  return { x: x2, y: y2 };
+}
+// 爆心到目標中心的連線是否穿過實心格(起點格與目標格本身不算)
+function lineBlocked(x1, y1, x2, y2) {
+  var d = Math.hypot(x2 - x1, y2 - y1), n = Math.max(1, Math.ceil(d / 4)), i;
+  var oc = Math.floor(x1 / TS), orr = Math.floor(y1 / TS), tc = Math.floor(x2 / TS), tr = Math.floor(y2 / TS);
+  for (i = 0; i <= n; i++) {
+    var c = Math.floor((x1 + (x2 - x1) * i / n) / TS), r = Math.floor((y1 + (y2 - y1) * i / n) / TS);
+    if ((c === oc && r === orr) || (c === tc && r === tr)) continue;
+    if (isSol(SOL, c, r)) return true;
+  }
+  return false;
+}
+// 地面衝撞道: 從 m 朝 dir 走, 取「最遠 maxD」「前方牆」「腳下平台邊緣」三者最近的行走距離(與實際衝撞 chargeStep 用同一組 2px 步進)
+function laneDist(m, dir, maxD) {
+  var pos = m.x, t = { x: m.x, y: m.y, w: m.w, h: m.h };
+  while (Math.abs(pos - m.x) < maxD - 0.01) {
+    var st = Math.min(2, maxD - Math.abs(pos - m.x)), nx = pos + dir * st;
+    if (boxHit(nx, m.y, m.w, m.h)) break;
+    pos = nx; t.x = pos;
+    if (!groundAhead(t, dir)) break;
+  }
+  return Math.abs(pos - m.x);
+}
+// 衝撞一幀(速度 spd): 2px 一步, 撞牆 / 到平台邊緣 / 走滿 m.lane 就回 true(衝撞結束)
+function chargeStep(m, spd) {
+  var rem = spd * DT;
+  while (rem > 0) {
+    var st = Math.min(2, rem, m.lane - m.dist);
+    if (st <= 0.0001) return true;
+    rem -= st;
+    if (moveX(m, m.facing * st)) return true;
+    m.dist += st;
+    if (m.onGround && !groundAhead(m, m.facing)) return true;
+    if (m.dist >= m.lane - 0.01) return true;
+  }
+  return false;
+}
+// 刺藤花藤鞭掃區寬: 前方 140, 碰到牆那一側截在牆面
+function sweepWidth(m) {
+  var x0 = m.x + m.facing * 20, gy = m.y + m.h / 2, r0 = Math.floor((gy - 40) / TS), r1b = Math.floor((gy - 0.001) / TS), w, r;
+  for (w = 0; w < 140; w += 2) {
+    var c = Math.floor((x0 + m.facing * (w + 1)) / TS);
+    for (r = r0; r <= r1b; r++) if (isSol(SOL, c, r)) return w;
+  }
+  return 140;
+}
+// 爆風擊退的水平帶: 左右各 130, 從玩家所在格往外逐格找牆(牆 = 玩家身高範圍內任何實心格, 含裂岩牆; 不看腳下地板與頭頂天花板)
+function waveBand(px, py) {
+  var r0 = Math.floor((py - 18) / TS), r1b = Math.floor((py + 18 - 0.001) / TS), col = Math.floor(px / TS);
+  var left = px - 130, right = px + 130, cr = [], c, r;
+  function colSolid(cc) { for (var rr = r0; rr <= r1b; rr++) if (isSol(SOL, cc, rr)) return true; return false; }
+  function colCracks(cc) { for (var rr = r0; rr <= r1b; rr++) R.L.cracks.forEach(function (q, i) { if (q[0] === cc && q[1] === rr && R.crHp[i] > 0) cr.push(q); }); }
+  for (c = col - 1; c >= Math.floor((px - 130) / TS); c--) {
+    if (colSolid(c)) { left = Math.max(left, (c + 1) * TS); colCracks(c); break; }
+  }
+  for (c = col + 1; c <= Math.floor((px + 130) / TS); c++) {
+    if (colSolid(c)) { right = Math.min(right, c * TS); colCracks(c); break; }
+  }
+  left = Math.min(left, px); right = Math.max(right, px);
+  return { left: left, right: right, cracks: cr };
+}
+// 畫面矩形扣掉實心格(evenodd)的 clip, 讓區域型預告 / 爆炸 / 範圍圈不畫進牆裡; 站立面(頂面外露的格)只扣掉下方, 貼地的圈不被切半
+function solidClipBegin(c, sol) {
+  var r, cc;
+  c.save(); c.beginPath(); c.rect(0, 0, W, H);
+  for (r = 0; r < GH; r++) for (cc = 0; cc < GW; cc++) {
+    if (sol[r][cc] !== 1) continue;
+    var top = (r > 0 && sol[r - 1][cc] !== 1) ? 5 : 0;
+    c.rect(cc * TS, r * TS + top, TS, TS - top);
+  }
+  c.clip('evenodd');
+}
+
 // ---------------------------------------------------------------- 進關
 function newMon(d) {
   var D = MDEF[d.type];
   var m = { id: d.id, type: d.type, x: d.x, y: d.y, w: D.w, h: D.h, hp: D.hp, maxHp: D.hp, sh: D.sh || 0, maxSh: D.sh || 0, hasShield: !!D.sh,
     facing: -1, state: 'walk', t: 0, vx: 0, vy: 0, onGround: false, alive: true, hitT: 0, blockT: 0, breakT: 0.4, anim: Math.random() * 3,
     fl: null, atk: null, sx: d.x, sy: d.y, t2: 0, cd: 1.6, jt: 0, brood: !!d.brood, chip: D.hp + (D.sh || 0), chipT: 0.4, dist: 0, lock: 0,
-    lockX: 0, lockY: 0, ang: 0, stT: 0, stD: 0, mk: d.kind || null, grp: null, idx: 0, dir: 1 };
+    lockX: 0, lockY: 0, ang: 0, stT: 0, stD: 0, mk: d.kind || null, grp: null, idx: 0, dir: 1, lane: 0, sw: 0 };
   if (d.type === 'frog') { m.state = 'crouch'; m.t = 1.2; }
   else if (d.type === 'bee') m.state = 'fly';
   else if (d.type === 'thorn') m.state = 'idle';
@@ -760,9 +744,23 @@ function hurtSpike(hitX, hitY) {
 function boom(x, y, atk, r, dmg, pl, kind) {
   R.expl.push({ x: x, y: y, t: 0, dur: 0.4, r: r, kind: kind });
   snd('explosion');
-  R.mons.forEach(function (m) { if (m.alive && circleBox(x, y, r, m)) dmgMon(m, dmg, { kind: kind, fx: x, cy: y, atk: atk, pl: pl }); });
-  R.L.cracks.forEach(function (q, i) { if (kind === 'bomb' && R.crHp[i] > 0 && circleCell(x, y, r, q[0], q[1])) hitCrack(i, 3); });
+  // 爆炸被牆擋住(規則 35a): 先由近到遠炸裂岩牆(碎掉的牆不再擋後面的), 再算怪物與玩家
+  var cs = [];
+  R.L.cracks.forEach(function (q, i) {
+    if (kind === 'bomb' && R.crHp[i] > 0 && circleCell(x, y, r, q[0], q[1])) cs.push({ i: i, d: Math.hypot(q[0] * TS + 20 - x, q[1] * TS + 20 - y) });
+  });
+  cs.sort(function (a, b) { return a.d - b.d; });
+  cs.forEach(function (o) {
+    var q = R.L.cracks[o.i];
+    if (R.crHp[o.i] > 0 && !lineBlocked(x, y, q[0] * TS + 20, q[1] * TS + 20)) hitCrack(o.i, 3);
+  });
+  R.mons.forEach(function (m) { if (m.alive && circleBox(x, y, r, m) && !lineBlocked(x, y, m.x, m.y)) dmgMon(m, dmg, { kind: kind, fx: x, cy: y, atk: atk, pl: pl }); });
   if (kind === 'bomb' && R.boss) bossHitTest(function (b) { return circleBox(x, y, r, b); }, dmg);
+  // 炸彈會波及自己: 玩家判定框與爆炸圈相交且沒被牆擋住 → 扣 1(一般受傷: 無敵 1 秒、遠離爆心彈開 80px; 不吃攻擊力加成), 一顆炸彈只傷一次
+  if (kind === 'bomb') {
+    var p = R.p;
+    if (circleBox(x, y, r, p) && !lineBlocked(x, y, p.x, p.y)) hurtPlayer(x, 'bomb', null, y);
+  }
 }
 // 死亡動畫(1.3 秒, 世界定格、不接輸入), 播完才出失敗面板; 這趟作廢(不存回放、素材與裝置不入帳)
 var DEATH_DUR = 1.3;
@@ -820,8 +818,9 @@ function stepPlayer() {
       if (dir !== 0) p.facing = dir;
       moveX(p, p.vx * DT);
     }
-    if (p.jumpBuf > 0 && p.coyote > 0) { p.vy = -JUMP_V; p.jumpT = 0; p.jumpBuf = 0; p.coyote = 0; p.onGround = false; snd('jump'); }
-    if (edge.jumpRel && p.jumpT < 0.15 && p.vy < -JUMP_V / 2) p.vy = -JUMP_V / 2;
+    var jv = jumpV(cls);
+    if (p.jumpBuf > 0 && p.coyote > 0) { p.vy = -jv; p.jumpT = 0; p.jumpBuf = 0; p.coyote = 0; p.onGround = false; snd('jump'); }
+    if (edge.jumpRel && p.jumpT < 0.15 && p.vy < -jv / 2) p.vy = -jv / 2;
     p.vy = Math.min(p.vy + GRAV * DT, 1500);
     var hd = false, fv = p.vy;
     if (moveY(p, p.vy * DT)) { if (p.vy > 0) hd = true; p.vy = 0; }
@@ -865,7 +864,7 @@ function doAttack() {
   if (p.dashT > 0) return;
   if (R.cls === 'sword') {
     if (p.atkCd > 0) return;
-    p.atkCd = 0.3; setAct('slash', 0.15); snd('slash');
+    p.atkCd = 0.2; setAct('slash', 0.15); snd('slash');
     var x0 = f > 0 ? p.x + 14 : p.x - 14 - 50, atk = ++R.atkId, cx = x0 + 25, d = 1 + atkB();
     R.mons.forEach(function (m) {
       if (m.alive && ovl(cx, p.y, 50, 40, m.x, m.y, m.w, m.h)) dmgMon(m, d, { kind: 'slash', fx: p.x, cy: p.y, atk: atk, blockable: true, pl: true });
@@ -894,16 +893,21 @@ function doSkill() {
   } else {
     p.skCd = skillDur('bomber'); p.castT = 0; setAct('wave', 0.3); snd('shockwave');
     var atk = ++R.atkId, d = 1 + atkB();
-    R.waves.push({ x: p.x, y: p.y, t: 0 });
+    // 爆風擊退: 水平帶(左右各 130、上下各 40), 兩側碰到實心格(含裂岩牆)就截在牆面; 上下不打
+    var bd = waveBand(p.x, p.y), bl = bd.left, br = bd.right, y0 = p.y - 40, y1 = p.y + 40;
+    R.waves.push({ x: p.x, y: p.y, t: 0, left: bl, right: br });
     R.mons.forEach(function (m) {
-      if (m.alive && circleBox(p.x, p.y, 130, m)) {
+      if (m.alive && m.x + m.w / 2 > bl && m.x - m.w / 2 < br && m.y + m.h / 2 > y0 && m.y - m.h / 2 < y1) {
         var dir = (m.x - p.x) > 0 ? 1 : ((m.x - p.x) < 0 ? -1 : f);
         var alive = dmgMon(m, d, { kind: 'shock', fx: p.x, cy: p.y, atk: atk, pl: true });
         if (alive && m.alive) flingMon(m, dir, atk);
       }
     });
-    R.L.cracks.forEach(function (q, i) { if (R.crHp[i] > 0 && circleCell(p.x, p.y, 130, q[0], q[1])) hitCrack(i, 3); });
-    if (R.boss) bossHitTest(function (b) { return circleBox(p.x, p.y, 130, b); }, d);
+    // 帶兩端擋住它的裂岩牆直接碎掉
+    bd.cracks.forEach(function (q) {
+      R.L.cracks.forEach(function (cq, i) { if (R.crHp[i] > 0 && cq[0] === q[0] && cq[1] === q[1]) hitCrack(i, 3); });
+    });
+    if (R.boss) bossHitTest(function (b) { return b.x + b.w / 2 > bl && b.x - b.w / 2 < br && b.y + b.h / 2 > y0 && b.y - b.h / 2 < y1; }, d);
     tutDone('5'); tutDone('13c');
   }
 }
@@ -926,8 +930,8 @@ function beetleBlast(m, killed) {
   R.expl.push({ x: m.x, y: m.y, t: 0, dur: 0.4, r: 70, kind: 'beetle' });
   snd('explosion');
   var p = R.p;
-  if (circleBox(m.x, m.y, 70, { x: p.x, y: p.y, w: p.w, h: p.h })) hurtPlayer(m.x, 'beetle', null, m.y);
-  R.mons.forEach(function (o) { if (o !== m && o.alive && circleBox(m.x, m.y, 70, o)) dmgMon(o, 2, { kind: 'beetle', fx: m.x, cy: m.y, atk: m.atk }); });
+  if (circleBox(m.x, m.y, 70, { x: p.x, y: p.y, w: p.w, h: p.h }) && !lineBlocked(m.x, m.y, p.x, p.y)) hurtPlayer(m.x, 'beetle', null, m.y);
+  R.mons.forEach(function (o) { if (o !== m && o.alive && circleBox(m.x, m.y, 70, o) && !lineBlocked(m.x, m.y, o.x, o.y)) dmgMon(o, 2, { kind: 'beetle', fx: m.x, cy: m.y, atk: m.atk }); });
 }
 function stepFling(m) {
   var fl = m.fl;
@@ -973,11 +977,10 @@ function stepMon(m) {
       if (m.state === 'walk') {
         if (m.onGround && !groundAhead(m, m.facing)) m.facing *= -1;
         if (moveX(m, 80 * m.facing * DT)) m.facing *= -1;
-        if (m.onGround && Math.abs(dy) <= 40 && dx * m.facing > 0 && Math.abs(dx) <= 240) { setSt(m, 'windup', 0.5); snd('windup'); }
-      } else if (m.state === 'windup') { m.t -= DT; if (m.t <= 0) setSt(m, 'charge', 0); }
+        if (m.onGround && Math.abs(dy) <= 40 && dx * m.facing > 0 && Math.abs(dx) <= 240) { setSt(m, 'windup', 0.5); m.lane = laneDist(m, m.facing, 240); snd('windup'); }
+      } else if (m.state === 'windup') { m.t -= DT; if (m.t <= 0) { setSt(m, 'charge', 0); m.dist = 0; } }
       else if (m.state === 'charge') {
-        h = moveX(m, 420 * m.facing * DT);
-        if (h || (m.onGround && !groundAhead(m, m.facing))) setSt(m, 'stun', 1);
+        if (chargeStep(m, 420)) setSt(m, 'stun', 1);
       } else { m.t -= DT; if (m.t <= 0) setSt(m, 'walk', 0); }
       break;
     case 'frog':
@@ -994,11 +997,11 @@ function stepMon(m) {
       monFloor(m);
       if (m.state === 'idle') {
         m.facing = dx >= 0 ? 1 : -1;
-        if (Math.abs(dx) <= 140 && Math.abs(dy) <= 60) { setSt(m, 'windup', 0.6); snd('windup'); }
+        if (Math.abs(dx) <= 140 && Math.abs(dy) <= 60) { setSt(m, 'windup', 0.6); m.sw = sweepWidth(m); snd('windup'); }
       } else if (m.state === 'windup') { m.t -= DT; if (m.t <= 0) setSt(m, 'whip', 0.3); }
       else if (m.state === 'whip') {
-        var zx = m.facing > 0 ? m.x + 20 : m.x - 20 - 140, gy = m.y + m.h / 2;
-        if (ovl(zx + 70, gy - 20, 140, 40, p.x, p.y, p.w, p.h)) hurtPlayer(m.x, 'thorn', null, m.y);
+        var zx = m.facing > 0 ? m.x + 20 : m.x - 20 - m.sw, gy = m.y + m.h / 2;
+        if (m.sw > 0 && ovl(zx + m.sw / 2, gy - 20, m.sw, 40, p.x, p.y, p.w, p.h)) hurtPlayer(m.x, 'thorn', null, m.y);
         m.t -= DT; if (m.t <= 0) setSt(m, 'recover', 1.2);
       } else { m.t -= DT; if (m.t <= 0) setSt(m, 'idle', 0); }
       break;
@@ -1007,11 +1010,10 @@ function stepMon(m) {
       if (m.state === 'walk') {
         if (m.onGround && !groundAhead(m, m.facing)) m.facing *= -1;
         if (moveX(m, 70 * m.facing * DT)) m.facing *= -1;
-        if (m.onGround && Math.abs(dy) <= 40 && dx * m.facing > 0 && Math.abs(dx) <= 200) { setSt(m, 'windup', 0.6); snd('windup'); }
+        if (m.onGround && Math.abs(dy) <= 40 && dx * m.facing > 0 && Math.abs(dx) <= 200) { setSt(m, 'windup', 0.6); m.lane = laneDist(m, m.facing, 160); snd('windup'); }
       } else if (m.state === 'windup') { m.t -= DT; if (m.t <= 0) { setSt(m, 'butt', 0); m.dist = 0; } }
       else if (m.state === 'butt') {
-        var step = 300 * DT; h = moveX(m, m.facing * step); m.dist += step;
-        if (h || m.dist >= 160 || (m.onGround && !groundAhead(m, m.facing))) setSt(m, 'stagger', 0.8);
+        if (chargeStep(m, 300)) setSt(m, 'stagger', 0.8);
       } else { m.t -= DT; if (m.t <= 0) setSt(m, 'walk', 0); }
       break;
     case 'hawk': stepHawk(m); break;
@@ -1093,19 +1095,23 @@ function stepHawk(m) {
     if (m.y <= m.sy) { m.y = m.sy; setSt(m, 'circle', 0); m.dir = dx >= 0 ? 1 : -1; }
   }
 }
+// 落石蜥沿天花板爬: 前緣上方要有天花板, 且前緣身體那格不能是牆(天花板有凹槽時會穿牆)
+function lizardCanGo(m, nx, dir) {
+  var col = Math.floor((nx + 18 * dir) / TS), cr = Math.floor((m.ceilY - 2) / TS);
+  return nx >= m.sx - 80 && nx <= m.sx + 80 && isSol(SOL, col, cr) && !isSol(SOL, col, cr + 1);
+}
 function stepLizard(m) {
   var p = R.p, dx = p.x - m.x;
   m.y = m.ceilY + 12;
   m.cd = Math.max(0, m.cd - DT);
   if (m.state === 'crawl') {
     var nx = m.x + 40 * m.dir * DT;
-    var cr = Math.floor((m.ceilY - 2) / TS);
-    var ok = nx >= m.sx - 80 && nx <= m.sx + 80 && isSol(SOL, Math.floor((nx + 18 * m.dir) / TS), cr);
-    if (ok) m.x = nx; else m.dir *= -1;
+    if (lizardCanGo(m, nx, m.dir)) m.x = nx; else m.dir *= -1;
     m.facing = m.dir;
     if (m.cd <= 0 && Math.abs(dx) <= 200 && p.y > m.y) { setSt(m, 'windup', 0.5); m.colX = m.x + Math.max(-40, Math.min(40, dx)); snd('windup'); }
   } else if (m.state === 'windup') {
-    var mv = Math.max(-80 * DT, Math.min(80 * DT, m.colX - m.x)); m.x += mv;
+    var mv = Math.max(-80 * DT, Math.min(80 * DT, m.colX - m.x));
+    if (mv !== 0 && lizardCanGo(m, m.x + mv, mv > 0 ? 1 : -1)) m.x += mv;
     m.t -= DT;
     if (m.t <= 0) { R.rocks.push({ x: m.x, y: m.y + 12, vx: 0, vy: 0, t: 0, kind: 'lizard', g: GRAV }); snd('rock_drop'); setSt(m, 'throw', 0.2); }
   } else if (m.state === 'throw') {
@@ -1141,11 +1147,16 @@ function stepMother(m) {
     if (m.state === 'walk') {
       h = moveX(m, 50 * m.facing * DT);
       if (h || bound() || (m.onGround && !groundAhead(m, m.facing))) m.facing *= -1;
-      if (Math.abs(dy) <= 80 && dx * m.facing > 0 && Math.abs(dx) <= 320) { setSt(m, 'windup', 0.8); snd('windup'); }
-    } else if (m.state === 'windup') { m.t -= DT; if (m.t <= 0) setSt(m, 'charge', 0); }
+      if (Math.abs(dy) <= 80 && dx * m.facing > 0 && Math.abs(dx) <= 320) {
+        setSt(m, 'windup', 0.8); snd('windup');
+        m.lane = laneDist(m, m.facing, Math.max(0, m.facing > 0 ? hi - m.x : m.x - lo));
+      }
+    } else if (m.state === 'windup') { m.t -= DT; if (m.t <= 0) { setSt(m, 'charge', 0); m.dist = 0; } }
     else if (m.state === 'charge') {
-      h = moveX(m, 380 * m.facing * DT);
-      if (h || bound() || (m.onGround && !groundAhead(m, m.facing))) setSt(m, 'stun', 1.5);
+      // 衝撞距離已把巢穴邊緣算進 m.lane; 這裡只做保險夾位
+      var ended = chargeStep(m, 380);
+      m.x = Math.max(lo, Math.min(hi, m.x));
+      if (ended) setSt(m, 'stun', 1.5);
     } else { m.t -= DT; if (m.t <= 0) { setSt(m, 'walk', 0); m.facing = dx >= 0 ? 1 : -1; if (m.x <= lo) m.facing = 1; if (m.x >= hi) m.facing = -1; } }
   } else if (m.mk === 'cliff') {
     if (m.state === 'walk') {
@@ -1422,8 +1433,10 @@ function stepProj() {
     b.t += DT; b.vy += GRAV * DT;
     var bn = Math.ceil(Math.max(Math.abs(b.vx), Math.abs(b.vy)) * DT / 6), ex = false;
     for (k = 0; k < bn && !ex; k++) {
+      var bpx = b.x, bpy = b.y;
       b.x += b.vx * DT / bn; b.y += b.vy * DT / bn;
-      if (isSol(SOL, Math.floor(b.x / TS), Math.floor(b.y / TS)) || b.x < 0 || b.x > W) { ex = true; break; }
+      // 碰到地形: 爆心退回進入實心格之前的自由位置(爆炸判定從那裡算, 才不會被撞上的那面牆自己擋住)
+      if (isSol(SOL, Math.floor(b.x / TS), Math.floor(b.y / TS)) || b.x < 0 || b.x > W) { b.x = bpx; b.y = bpy; ex = true; break; }
       for (var q = 0; q < R.mons.length; q++) {
         m = R.mons[q];
         if (m.alive && ovl(b.x, b.y, 12, 12, m.x, m.y, m.w, m.h) && !(m.type === 'mother' && m.state === 'under')) { ex = true; break; }
@@ -1458,21 +1471,30 @@ function buildTele() {
   R.mons.forEach(function (m) {
     if (!m.alive || m.fl) return;
     var gy = m.y + m.h / 2, pr;
-    if (m.type === 'boar' && m.state === 'windup') tl.push({ kind: 'lane', x: m.x + m.facing * 24, y: gy, x2: m.x + m.facing * 264, p: 1 - m.t / 0.5 });
-    else if (m.type === 'ram' && m.state === 'windup') tl.push({ kind: 'lane', x: m.x + m.facing * 22, y: gy, x2: m.x + m.facing * 182, p: 1 - m.t / 0.6 });
+    // 預告端點一律由這裡截在實心地形 / 平台邊緣, 與實際攻擊距離一致(規則 35a)
+    if (m.type === 'boar' && m.state === 'windup') tl.push({ kind: 'lane', x: m.x + m.facing * 24, y: gy, x2: m.x + m.facing * (24 + m.lane), p: 1 - m.t / 0.5 });
+    else if (m.type === 'ram' && m.state === 'windup') tl.push({ kind: 'lane', x: m.x + m.facing * 22, y: gy, x2: m.x + m.facing * (22 + m.lane), p: 1 - m.t / 0.6 });
     else if (m.type === 'frog' && m.state === 'crouch' && m.t <= 0.3 && m.onGround) { var pl = frogPlan(m); tl.push({ kind: 'ring', x: pl.lx, y: pl.ly, w: 40, p: 1 - m.t / 0.3 }); }
-    else if (m.type === 'bee' && m.state === 'aim') tl.push({ kind: 'aim', x: m.x, y: m.y, x2: p.x, y2: p.y, p: 1 - m.t / 0.4 });
-    else if (m.type === 'thorn' && m.state === 'windup') tl.push({ kind: 'sweep', x: m.facing > 0 ? m.x + 20 : m.x - 160, y: gy - 40, w: 140, h: 40, p: 1 - m.t / 0.6 });
-    else if (m.type === 'hawk' && m.state === 'hover') tl.push({ kind: 'dive', x: m.x, y: m.y, x2: m.lockX, y2: m.lockY, p: 1 - m.t / 0.7 });
+    else if (m.type === 'bee' && m.state === 'aim') { var ae = rayTrunc(m.x, m.y, p.x, p.y); tl.push({ kind: 'aim', x: m.x, y: m.y, x2: ae.x, y2: ae.y, p: 1 - m.t / 0.4 }); }
+    else if (m.type === 'thorn' && m.state === 'windup') tl.push({ kind: 'sweep', x: m.facing > 0 ? m.x + 20 : m.x - 20 - m.sw, y: gy - 40, w: m.sw, h: 40, p: 1 - m.t / 0.6 });
+    else if (m.type === 'hawk' && m.state === 'hover') { var de = rayTrunc(m.x, m.y, m.lockX, m.lockY); tl.push({ kind: 'dive', x: m.x, y: m.y, x2: de.x, y2: de.y, p: 1 - m.t / 0.7 }); }
     else if (m.type === 'lizard' && m.state === 'windup') tl.push({ kind: 'column', x: m.colX, y: m.y + 12, y2: groundTopFrom(m.colX, m.y + 12), w: 32, p: 1 - m.t / 0.5 });
     else if (m.type === 'beetle' && m.state === 'fuse') tl.push({ kind: 'blast', x: m.x, y: m.y, r: 70, p: 1 - m.t / 0.8 });
     else if (m.type === 'mother') {
-      if (m.mk === 'forest' && m.state === 'windup') tl.push({ kind: 'lane', x: m.x + m.facing * 32, y: gy, x2: m.facing > 0 ? m.hi + 32 : m.lo - 32, p: 1 - m.t / 0.8 });
+      if (m.mk === 'forest' && m.state === 'windup') tl.push({ kind: 'lane', x: m.x + m.facing * 32, y: gy, x2: m.x + m.facing * (32 + m.lane), p: 1 - m.t / 0.8 });
       else if (m.mk === 'cliff' && m.state === 'windup') {
         var dir = p.x >= m.x ? 1 : -1;
         [30, 50, 70].forEach(function (a) {
-          var r = a * Math.PI / 180, vx = Math.cos(r) * 300 * dir, vy = -Math.sin(r) * 300, pts = [], q;
-          for (q = 0; q < 12; q++) { var tt = q * 0.18; pts.push([Math.round(m.x + vx * tt), Math.round(m.y - 10 + vy * tt + 0.5 * SPIT_G * tt * tt)]); }
+          var r = a * Math.PI / 180, vx = Math.cos(r) * 300 * dir, vy = -Math.sin(r) * 300, all = [], pts = [], q, hit = false;
+          // 每 0.03 秒取一點, 碰到第一個實心格(或出畫面)就截斷, 再均勻抽到 3~12 點
+          for (q = 0; q < 70 && !hit; q++) {
+            var tt = q * 0.03, ax = m.x + vx * tt, ay = m.y - 10 + vy * tt + 0.5 * SPIT_G * tt * tt;
+            if (ax < 0 || ax > W || ay > H || isSol(SOL, Math.floor(ax / TS), Math.floor(ay / TS))) hit = true;
+            else all.push([Math.round(ax), Math.round(ay)]);
+          }
+          if (all.length < 3) return;
+          var cnt = Math.min(12, all.length);
+          for (q = 0; q < cnt; q++) pts.push(all[Math.round(q * (all.length - 1) / (cnt - 1))]);
           tl.push({ kind: 'arc', pts: pts, p: 1 - m.t / 0.7 });
         });
       } else if (m.mk === 'mine' && m.state === 'under') tl.push({ kind: 'crack', x: m.crackX, y: gy, w: 64, p: 1 - m.t / 0.8 });
@@ -1501,11 +1523,12 @@ function snap() {
     p: { x: p.x, y: p.y, cls: R.cls, facing: p.facing, pose: p.pose, poseT: p.poseT, inv: p.inv > 0, stealth: p.stealth, stealthT: p.stealthT, unT: p.unT },
     m: [], tl: buildTele(),
     a: R.arrows.map(function (a) { return [a.x, a.y, a.ang]; }),
-    b: R.bombs.map(function (b) { return [b.x, b.y, b.t]; }),
+    // 第 4 項 = 玩家判定框此刻在爆炸圈內(沒被牆擋住): 炸彈現在炸開會打到自己
+    b: R.bombs.map(function (b) { return [b.x, b.y, b.t, circleBox(b.x, b.y, 60, p) && !lineBlocked(b.x, b.y, p.x, p.y)]; }),
     s: R.shots.map(function (s) { return [s.x, s.y]; }),
     rk: R.rocks.map(function (s) { return [s.x, s.y, s.t, s.kind]; }),
     ex: R.expl.map(function (e) { return [e.x, e.y, e.t, e.dur, e.r, e.kind]; }),
-    wv: R.waves.map(function (e) { return [e.x, e.y, e.t]; }),
+    wv: R.waves.map(function (e) { return [e.x, e.y, e.t, e.left, e.right]; }),
     po: R.poofs.map(function (e) { return [e.x, e.y, e.t, e.size]; }),
     cr: R.crHp.slice(), chest: R.chestOpen, boss: bossSnap(), beam: R.beam ? { x1: R.beam.x1, y1: R.beam.y1, x2: R.beam.x2, y2: R.beam.y2, w: 48, t: R.beam.t } : null,
     gfall: R.goalFall
@@ -1698,7 +1721,7 @@ function canPay(cost) { return KINDS.every(function (k) { return !cost[k] || G.s
 function pay(cost) { KINDS.forEach(function (k) { if (cost[k]) G.stock[k] -= cost[k]; }); }
 function costOf(kind, n) { var c = zeros(); c[kind] = n; return c; }
 function recruitCost() { return costOf('wood', RECRUIT_COST); }
-var STAT_KEYS = ['speed', 'hp', 'cd', 'atk'], STAT_COSTS = [SPEED_COST, HP_COST, CD_COST, ATK_COST], STAT_MAX = [3, 2, 3, 2];
+var STAT_KEYS = ['speed', 'hp', 'cd', 'atk'], STAT_COSTS = [SPEED_COST, HP_COST, CD_COST, ATK_COST], STAT_MAX = [3, 3, 3, 3];
 function statCost(i) {
   var lv = G.up[STAT_KEYS[i]], arr = STAT_COSTS[i];
   return lv >= arr.length ? null : costOf('core', arr[lv]);
@@ -2077,7 +2100,15 @@ function drawScene(c, o) {
   if (!o.cached) drawTerrain(c, L);
   S.cr.forEach(function (hp, k) { if (hp > 0) Art.drawCrackWall(c, { x: L.cracks[k][0] * TS + 20, y: L.cracks[k][1] * TS + 20, hp: hp, theme: L.theme }); });
   drawSites(c, L, o.rep, o.build);
-  if (o.mode !== 'preview') S.tl.forEach(function (q) { Art.drawTelegraph(c, teleState(q)); });
+  // 區域型預告 / 爆炸 / 炸彈範圍圈: 先 clip 扣掉實心格再畫, 不畫進牆裡(規則 35a); 其他預告的端點已由 buildTele 截好
+  function clipped(fn) {
+    if (!o.sol) o.sol = live ? SOL : solidForScene(o);
+    solidClipBegin(c, o.sol); fn(); c.restore();
+  }
+  if (o.mode !== 'preview') S.tl.forEach(function (q) {
+    if (q.kind === 'blast' || q.kind === 'ring' || q.kind === 'crack') clipped(function () { Art.drawTelegraph(c, teleState(q)); });
+    else Art.drawTelegraph(c, teleState(q));
+  });
   L.picks.forEach(function (d) {
     if (!zOk(d.z, o.rep) || o.taken(d.id)) return;
     Art.drawPickup(c, { x: d.x, y: d.y, kind: d.kind, t: G.t });
@@ -2101,7 +2132,7 @@ function drawScene(c, o) {
     if (thumb && m.k !== 'mother') return;
     if (o.mode === 'preview') return;
     var big = m.k === 'mother';
-    Art.drawHpBar(c, { x: m.x, y: m.y - m.h / 2 - 8, hp: m.hp, maxHp: m.mhp, shield: m.sh, maxShield: m.msh, chip: m.chip, chipT: m.chipT, chipDur: 0.4, big: big, weak: !!m.weak });
+    Art.drawHpBar(c, { x: m.x, y: m.y - m.h / 2 - 8, hp: m.hp, maxHp: m.mhp, shield: m.sh, maxShield: m.msh, chip: m.chip, chipT: m.chipT, chipDur: 0.4, big: big, weak: !!m.weak, shieldSide: m.k === 'shield' && m.f > 0 ? 1 : -1 });
   });
   // 巨像血量歸 0(崩解演出起)不再畫血條
   if (S.boss && o.mode !== 'preview' && !S.boss.ko && S.boss.hp > 0) {
@@ -2111,12 +2142,16 @@ function drawScene(c, o) {
   if (S.p && !o.noPlayer) Art.drawPlayer(c, { x: S.p.x, y: S.p.y, cls: S.p.cls, facing: S.p.facing, pose: o.cheering ? 'cheer' : S.p.pose, poseT: o.cheering ? Math.max(0, o.cheerT) : S.p.poseT, invuln: S.p.inv, stealth: S.p.stealth,
     stealthT: S.p.stealthT, stealthDur: 2.5, unstealthT: S.p.unT, unstealthDur: 0.3 });
   S.a.forEach(function (a) { Art.drawArrow(c, { x: a[0], y: a[1], angle: a[2] }); });
-  S.b.forEach(function (b) { Art.drawBomb(c, { x: b[0], y: b[1], t: b[2] }); });
+  S.b.forEach(function (b) {
+    // 縮圖不畫範圍圈(radius = 0); 範圍圈不畫進牆裡
+    if (thumb) Art.drawBomb(c, { x: b[0], y: b[1], t: b[2], radius: 0, danger: false });
+    else clipped(function () { Art.drawBomb(c, { x: b[0], y: b[1], t: b[2], radius: 60, danger: !!b[3] }); });
+  });
   S.s.forEach(function (s) { Art.drawBeeShot(c, { x: s[0], y: s[1] }); });
   S.rk.forEach(function (s) { Art.drawRockShot(c, { x: s[0], y: s[1], t: s[2], kind: s[3] }); });
   if (S.beam) Art.drawBossBeam(c, S.beam);
-  S.ex.forEach(function (e) { Art.drawExplosion(c, { x: e[0], y: e[1], t: e[2], dur: e[3], radius: e[4], kind: e[5] }); });
-  S.wv.forEach(function (e) { Art.drawShockwave(c, { x: e[0], y: e[1], t: e[2], dur: 0.4, radius: 130 }); });
+  S.ex.forEach(function (e) { clipped(function () { Art.drawExplosion(c, { x: e[0], y: e[1], t: e[2], dur: e[3], radius: e[4], kind: e[5] }); }); });
+  S.wv.forEach(function (e) { Art.drawShockwave(c, { x: e[0], y: e[1], t: e[2], dur: 0.4, left: e[3], right: e[4], halfH: 40 }); });
   S.po.forEach(function (e) { Art.drawPoof(c, { x: e[0], y: e[1], t: e[2], dur: 0.5, size: e[3] }); });
   if (live) R.bits.forEach(function (b) { if (b.t >= 0) Art.drawDropBit(c, { x: b.px, y: b.py, kind: b.kind, t: b.t, dur: 1.0, vx: b.vxx, vy: b.vyy }); });
   L.sites.forEach(function (st, k) {
@@ -2129,6 +2164,12 @@ function drawScene(c, o) {
   if (!thumb) L.sites.forEach(function (st, k) {
     if (!o.rep[k]) Art.drawSiteSign(c, { x: st.sign[0] * TS + 20, y: st.sign[1] * TS - 24, role: st.role, num: k + 1 });
   });
+}
+// 非即時畫面(縮圖回放、預覽)的實心格表: 目前修復狀態 + 這一幀還沒碎的裂岩牆
+function solidForScene(o) {
+  var s = makeSolid(o.L, o.rep);
+  o.L.cracks.forEach(function (q, i) { if (o.S.cr[i] > 0) s[q[1]][q[0]] = 1; });
+  return s;
 }
 var PREVIEW_STATE = { boar: 'walk', frog: 'crouch', bee: 'fly', thorn: 'idle', ram: 'walk', hawk: 'circle', lizard: 'crawl', shield: 'walk', beetle: 'crawl', bat: 'fly', mother: 'walk' };
 function previewSnap(l) {
@@ -2446,10 +2487,26 @@ function resize() {
   canvas.width = Math.round(cssW * DPR); canvas.height = Math.round(cssH * DPR);
 }
 var canvas = null, ctx = null, DPR = 1;
+// 關卡編輯器「試玩」: 網址帶 ?level=N(1~8)時跳過開始畫面直接用劍士進第 N 關(教學全部略過、關卡全開);
+// 可另帶 &cls=hunter|bomber 換職業、&rep=101 指定工程 1~3 是否已修好。沒帶 level 參數時什麼都不做, 不影響正常遊玩
+function devStart() {
+  var q = (window.location && window.location.search) || '', m = /[?&]level=(\d+)/.exec(q);
+  if (!m) return;
+  var l = parseInt(m[1], 10) - 1;
+  if (!(l >= 0 && l < LEVELS.length)) return;
+  var cm = /[?&]cls=(sword|hunter|bomber)/.exec(q), rm = /[?&]rep=([01]{1,3})/.exec(q), i;
+  TUT_IDS.forEach(function (id) { T.done[id] = true; });
+  for (i = 0; i < 8; i++) G.opened[i] = true;
+  CLS_LIST.forEach(function (k) { G.recruited[k] = true; });
+  if (rm) for (i = 0; i < rm[1].length; i++) G.repaired[l][i] = rm[1].charAt(i) === '1';
+  G.clearedAny = true; G.screen = 'map'; G.mapSel = l;
+  startRun(l, cm ? cm[1] : 'sword');
+}
 function init() {
   canvas = document.getElementById('c');
   ctx = canvas.getContext('2d');
   newGame();
+  devStart();
   resize();
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', resize);

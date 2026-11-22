@@ -1,6 +1,6 @@
 # 素材來源與授權
 
-`assets/` 裡每個檔各一列(62 列 = 55 個音效 + 7 首背景音樂; polish 第 2 輪新增 4 個音效, 標「本輪新增」)。音效是從下列素材包剪輯、疊層後重新輸出的, 「來源」欄列出用到的原始檔。
+`assets/` 裡每個檔各一列(62 列 = 55 個音效 + 7 首背景音樂; polish 第 2 輪新增 4 個音效, 標「第 2 輪新增」; polish 第 3 輪重做 `shockwave`、剪短 `slash`, 檔數不變, 用的仍是下表既有素材包)。音效是從下列素材包剪輯、疊層後重新輸出的, 「來源」欄列出用到的原始檔。
 
 ## 素材包
 
@@ -36,14 +36,14 @@
 | sfx_coin_land.mp3 | coin_land | TS coinflip-01 | 截 0.3 秒淡出 |
 | sfx_jump.mp3 | jump | TS boots-leather-jump-01 | 截 0.4 秒淡出 |
 | sfx_land.mp3 | land | K-IM impactSoft_heavy_002 + footstep_concrete_000 | 兩層疊加 |
-| sfx_slash.mp3 | slash | R80 blade_01 | 無 |
+| sfx_slash.mp3 | slash(第 3 輪剪短) | R80 blade_01 | 截 0.15 秒, 尾端 0.05 秒淡出 |
 | sfx_dash.mp3 | dash | BT swish_3 + R80 blade_02 | 風切加速 1.1 倍, 0.04 秒疊刀聲 |
 | sfx_arrow.mp3 | arrow | BT Bow.wav | 無 |
 | sfx_stealth_on.mp3 | stealth_on | K-IF minimize_004 | 無 |
 | sfx_stealth_off.mp3 | stealth_off | K-IF maximize_004 | 無 |
 | sfx_bomb_throw.mp3 | bomb_throw | TS tube-plastic-whoosh-01 | 無 |
 | sfx_explosion.mp3 | explosion | K-SF explosionCrunch_000 + lowFrequency_explosion_001 | 兩層疊加 |
-| sfx_shockwave.mp3 | shockwave | K-SF forceField_002 + K-IM impactSoft_heavy_000 | 兩層疊加 |
+| sfx_shockwave.mp3 | shockwave(第 3 輪重做) | K-IM impactSoft_heavy_000 + BT swish_3、swish_2 + K-SF lowFrequency_explosion_001 | 悶擊打頭(−2 dB); 風切降速 0.75 倍; 0.06 秒疊第二道風切(降速 0.8 倍, −4 dB); 低頻轟降速 0.85 倍截 0.55 秒淡出(−7 dB) |
 | sfx_hit.mp3 | hit | K-IM impactPunch_medium_000 | 無 |
 | sfx_hit_block.mp3 | hit_block | K-IM impactPlate_light_002 + impactMetal_light_001 | 兩層疊加 |
 | sfx_shield_break.mp3 | shield_break | K-IM impactMetal_heavy_001 + impactWood_heavy_002 + impactGlass_heavy_000 | 三層疊加; 限幅 0.6 dB |
@@ -73,10 +73,10 @@
 | sfx_boss_phase.mp3 | boss_phase | R80 creature_roar_01 + K-SF lowFrequency_explosion_000 | 吼叫降速 0.75 倍, 低頻轟截 1.2 秒淡出 |
 | sfx_boss_down.mp3 | boss_down | K-SF explosionCrunch_004 + lowFrequency_explosion_000 + R80 creature_roar_03 + K-MJ jingles_PIZZI02 + jingles_STEEL02 | 爆炸 + 低頻轟 + 降速 0.7 倍的吼叫, 1.3 秒接過關同旋律(撥弦 + 鋼鼓) |
 | sfx_pause.mp3 | pause | K-IF toggle_001 | 無 |
-| sfx_unlock_class.mp3 | unlock_class(本輪新增) | K-SF forceField_001 + K-IF glass_004 + K-IM impactBell_heavy_000 + K-MJ jingles_SAX10、jingles_PIZZI10、jingles_STEEL10 | 力場聲取前 0.45 秒**反轉**成漸強(−3 dB), 開頭墊亮音(−12 dB); 0.36 秒起薩克斯、0.42 秒起撥弦 / 鋼鼓 / 鐘聲(截 0.9 秒淡出)/ 亮音五層疊加 |
-| sfx_iris_close.mp3 | iris_close(本輪新增) | BT swish_3 + K-IF glass_004、glass_002 | 風切加速 1.3 倍截 0.2 秒淡出, 0.13 秒疊兩層亮音 |
-| sfx_player_death.mp3 | player_death(本輪新增) | K-IM impactPunch_heavy_002、impactBell_heavy_001 + K-IF bong_001 + K-SF lowFrequency_explosion_001 | 「咚」降速 0.5 倍; 低鐘截 0.66 秒淡出(−7 dB); 低頻轟降速 0.7 倍截 0.62 秒淡出(−6 dB); 四層疊加 |
-| sfx_shatter.mp3 | shatter(本輪新增) | K-IM impactGlass_heavy_004、impactGlass_medium_001、impactGlass_heavy_000、impactGlass_light_002、impactGlass_light_004 | 五片玻璃錯開 0 / 0.03 / 0.09 / 0.17 / 0.26 秒, 後三片加速 1.12~1.3 倍、音量遞減 |
+| sfx_unlock_class.mp3 | unlock_class(第 2 輪新增) | K-SF forceField_001 + K-IF glass_004 + K-IM impactBell_heavy_000 + K-MJ jingles_SAX10、jingles_PIZZI10、jingles_STEEL10 | 力場聲取前 0.45 秒**反轉**成漸強(−3 dB), 開頭墊亮音(−12 dB); 0.36 秒起薩克斯、0.42 秒起撥弦 / 鋼鼓 / 鐘聲(截 0.9 秒淡出)/ 亮音五層疊加 |
+| sfx_iris_close.mp3 | iris_close(第 2 輪新增) | BT swish_3 + K-IF glass_004、glass_002 | 風切加速 1.3 倍截 0.2 秒淡出, 0.13 秒疊兩層亮音 |
+| sfx_player_death.mp3 | player_death(第 2 輪新增) | K-IM impactPunch_heavy_002、impactBell_heavy_001 + K-IF bong_001 + K-SF lowFrequency_explosion_001 | 「咚」降速 0.5 倍; 低鐘截 0.66 秒淡出(−7 dB); 低頻轟降速 0.7 倍截 0.62 秒淡出(−6 dB); 四層疊加 |
+| sfx_shatter.mp3 | shatter(第 2 輪新增) | K-IM impactGlass_heavy_004、impactGlass_medium_001、impactGlass_heavy_000、impactGlass_light_002、impactGlass_light_004 | 五片玻璃錯開 0 / 0.03 / 0.09 / 0.17 / 0.26 秒, 後三片加速 1.12~1.3 倍、音量遞減 |
 
 ## 背景音樂(全部 CC BY 4.0, 遊戲內需署名)
 

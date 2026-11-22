@@ -9,7 +9,9 @@
   // 音量已在素材裡依 sound.md 的相對響度做好, 這裡是執行時的倍率(1 = 原檔)。
   var SFX_VOL = {};
   // 同名事件的最短間隔(秒): 規格要求的限頻, RD 漏做也不會疊成一團
-  var MIN_GAP = { hit: 0.05, coin_land: 0.06, drop_collect: 0.08, hit_block: 0.05, ui_move: 0.03, arrow: 0.05, rock_drop: 0.05, boss_rock: 0.08, pickup: 0.03 };
+  var MIN_GAP = { hit: 0.05, coin_land: 0.06, drop_collect: 0.08, hit_block: 0.05, ui_move: 0.03, arrow: 0.05, rock_drop: 0.05, boss_rock: 0.08, pickup: 0.03, slash: 0.05 };
+  // 同名事件「新的一聲起時, 前一聲在幾秒內淡出」: 快速連按時不疊加、不爆音(淡出而非硬切, 無喀聲)
+  var CHOKE = { slash: 0.015 };
   // 每次播放隨機微調音高(±比例), 連續觸發時不會像機關槍
   var JITTER = { hit: 0.06, coin_land: 0.08, drop_collect: 0.08, arrow: 0.05, slash: 0.05, pickup: 0.05, ui_move: 0.04, jump: 0.04, land: 0.04, rock_drop: 0.06, boss_rock: 0.05, hit_block: 0.05, bee_shot: 0.05 };
   // 同一瞬間的讓位: 播左邊的事件時, 前後 0.06 秒內的右邊事件不出聲(已響的立刻收掉)
@@ -246,7 +248,19 @@
           src.connect(g); g.connect(master);
           src.start(0, offsets[name] || 0);
           var list = live[name] || (live[name] = []);
-          var rec = { src: src, t: t };
+          if (CHOKE[name]) {
+            list.forEach(function (o) {
+              try {
+                var ct = ctx.currentTime, gg = o.g.gain;
+                gg.cancelScheduledValues(ct);
+                gg.setValueAtTime(gg.value, ct);
+                gg.linearRampToValueAtTime(0, ct + CHOKE[name]);
+                o.src.stop(ct + CHOKE[name] + 0.01);
+              } catch (e) {}
+            });
+            list.length = 0;
+          }
+          var rec = { src: src, t: t, g: g };
           list.push(rec);
           if (list.length > 6) list.shift();
           src.onended = function () { var l = live[name] || [], i = l.indexOf(rec); if (i >= 0) l.splice(i, 1); };

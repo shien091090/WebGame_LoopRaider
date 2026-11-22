@@ -411,9 +411,11 @@
       poly(ctx, [-8, -13, -14, -19, -12, -11]); hfs(ctx, PAL.gold, 0);
       rr(ctx, -8, -20, 16, 14, 3); hfs(ctx, col, 2);
       ctx.fillStyle = HC.ink; ctx.fillRect(-1, -15, 8, 3);
-      if (pose === 'slash' || pose === 'dash') { // 劍平舉朝前
+      if (pose === 'slash' || pose === 'dash') { // 劍平舉朝前; slash 時依 o.slashA 繞護手上下擺(正 = 往下)
+        ctx.save(); if (o.slashA) { ctx.translate(4, 1); ctx.rotate(o.slashA); ctx.translate(-4, -1); }
         poly(ctx, [4, -1, 13, -1, 14, 1, 13, 3, 4, 3]); hfs(ctx, HC.metal, 0); ctx.lineWidth = 1; ctx.strokeStyle = HC.ink; ctx.stroke();
         ctx.fillStyle = PAL.gold; ctx.fillRect(2.5, -3.5, 3, 9);
+        ctx.restore();
       } else if (pose === 'cheer') { // 劍高舉
         poly(ctx, [9, -18, 11, -20, 13, -18, 13, -6, 9, -6]); hfs(ctx, HC.metal, 0); ctx.lineWidth = 1; ctx.strokeStyle = HC.ink; ctx.stroke();
         ctx.fillStyle = PAL.gold; ctx.fillRect(7.5, -6.5, 7, 2.5);
@@ -474,6 +476,23 @@
     ctx.fillStyle = PAL[cls]; ctx.fill(); ctx.lineWidth = lw; ctx.strokeStyle = '#ffffff'; ctx.stroke();
   }
 
+  // 刀光掃動進度 → 刀鋒前緣角度(-π/2 = 頂、π/2 = 底); 第一幀就已掃出約 1/3, 連按重播時每一下都看得到
+  function slashHead(sp) { return -Math.PI / 2 + 0.9 + (Math.PI - 0.9) * eOut(clamp(sp / 0.5, 0, 1)); }
+  // 新月刀光: 原點 = 判定框中心; 外弧 48×19、內弧 28×8, 圓心在面向側框邊 (14, 0) → 全部落在框外 50×40 內
+  // dir 0 = 由上往下斬, 1 = 由下往上斬(上下鏡像); 刀鋒前緣一條白亮線 + 小星, 尾端隨後收掉
+  function drawSlashArc(ctx, f, dir, sp) {
+    var hA = slashHead(sp), tA = -Math.PI / 2 + (Math.PI - 0.25) * clamp((sp - 0.2) / 0.8, 0, 1);
+    if (hA - tA < 0.04) return;
+    ctx.save(); ctx.scale(f === -1 ? -1 : 1, dir === 1 ? -1 : 1);
+    ctx.globalAlpha *= 1 - sp * 0.55;
+    ctx.beginPath(); ctx.ellipse(14, 0, 48, 19, 0, tA, hA, false); ctx.ellipse(14, 0, 28, 8, 0, hA, tA, true); ctx.closePath();
+    ctx.fillStyle = 'rgba(232,244,255,0.92)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(120,180,255,0.95)'; ctx.stroke();
+    var c = Math.cos(hA), s = Math.sin(hA);
+    ctx.lineCap = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff';
+    ctx.beginPath(); ctx.moveTo(14 + 28 * c, 8 * s); ctx.lineTo(14 + 45 * c, 17.5 * s); ctx.stroke();
+    if (sp < 0.6) { star4(ctx, 14 + 44 * c, 17 * s, 2.5); ctx.fillStyle = '#ffffff'; ctx.fill(); }
+    ctx.restore();
+  }
   var POSES = ['idle', 'run', 'rise', 'fall', 'slash', 'dash', 'throw', 'wave', 'hurt', 'cheer'];
   function drawPlayer(ctx, st) {
     st = obj(st);
@@ -497,13 +516,9 @@
       var ls = [[-12, 52], [-3, 60], [6, 44], [14, 32]];
       for (var i = 0; i < ls.length; i++) { ctx.lineWidth = 3 - i * 0.4; ctx.beginPath(); ctx.moveTo(-f * 14, ls[i][0]); ctx.lineTo(-f * (14 + ls[i][1]), ls[i][0]); ctx.stroke(); }
     }
-    if (pose === 'slash' && pt < 0.15) { // 新月刀光: 面向側框外 50×40、與身體同高
-      var sp = pt / 0.15;
-      ctx.save(); ctx.globalAlpha *= 1 - sp * 0.6;
-      ctx.beginPath(); ctx.ellipse(f * 14, 0, 48, 19, 0, -Math.PI / 2, Math.PI / 2, f < 0);
-      ctx.ellipse(f * 14, 0, 28, 8, 0, Math.PI / 2, -Math.PI / 2, f > 0); ctx.closePath();
-      ctx.fillStyle = 'rgba(232,244,255,0.92)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(120,180,255,0.95)'; ctx.stroke();
-      ctx.restore();
+    if (pose === 'slash' && pt < 0.15) { // 新月刀光: 面向側框外 50×40、與身體同高; swingIdx 0 由上往下掃、1 由下往上掃
+      var sp = pt / 0.15, swing = Math.round(num(st.swingIdx, 0)) === 1 ? 1 : 0;
+      drawSlashArc(ctx, f, swing, sp);
     }
     ctx.save();
     if (stealth) ctx.globalAlpha *= 0.35;
@@ -512,6 +527,10 @@
     if (pose === 'wave') { ctx.translate(0, 18); ctx.scale(1, 0.92); ctx.translate(0, -18); }
     var o = { pose: pose, swing: 0 };
     if (pose === 'run') o.swing = Math.sin(pt * 18) * 3;
+    if (pose === 'slash' && cls === 'sword') { // 劍身跟著刀鋒前緣擺: 0 由上往下、1 由下往上(±0.6 rad, 劍尖仍在框內)
+      var sa = 0.6 * Math.sin(slashHead(Math.min(1, pt / 0.15)));
+      o.slashA = Math.round(num(st.swingIdx, 0)) === 1 ? -sa : sa;
+    }
     if (pose === 'rise') o.tuck = 5;
     if (pose === 'fall') o.spread = 2;
     if (pose === 'hurt') o.tint = '#ff6b6b';
@@ -1445,7 +1464,8 @@
       s = oneOf(s, ['circle', 'hover', 'dive', 'return', 'flung'], 'circle');
       if (s === 'dive' || s === 'return') {
         var c = Math.abs(Math.cos(ang)), sn = Math.abs(Math.sin(ang)), k = Math.min(1, 19 / (20 * c + 10 * sn), 13 / (20 * sn + 10 * c));
-        ctx.rotate(ang); ctx.scale(k, k);
+        // 朝左半邊飛(含 return 水平往左 angle = π)時上下鏡像, 眼睛與背保持在上方, 不會變成肚皮朝天
+        ctx.rotate(ang); ctx.scale(k, Math.cos(ang) < -1e-6 ? -k : k);
         if (s === 'dive') { poly(ctx, [20, 0, 4, -6, -16, -9, -10, 0, -16, 9, 4, 6]); ctx.fillStyle = FL ? '#ffffff' : lin(ctx, 0, -9, 0, 9, [0, '#8ea2c8', 1, '#34446a']); ctx.fill(); }
         else { blob(ctx, -8, -6, 10, 4, '#7a8eb8', '#3e4e72', -0.4); blob(ctx, -8, 6, 10, 4, '#7a8eb8', '#3e4e72', 0.4); blob(ctx, 0, 0, 10, 5.5, '#6a7ea8', '#34446a'); }
         if (brood) veins(ctx, [-10, 0, -4, -3, 2, 0], 2);
@@ -2106,8 +2126,8 @@
   }
   function drawSoundIcon(ctx, st) {
     st = obj(st);
-    var x = num(st.x, 1250), y = num(st.y, 62), on = st.on !== false;
-    ctx.save();
+    var x = num(st.x, 1250), y = num(st.y, 62), on = st.on !== false, al = clamp(num(st.alpha, 1), 0, 1);
+    ctx.save(); ctx.globalAlpha *= al; // 關卡內碰到物件時 RD 傳 0.3; 畫法不依位置改變(左上 / 右上同一個樣子)
     rr(ctx, x - 18, y - 15, 36, 33, 6); ctx.fillStyle = on ? '#8f8471' : '#55504a'; ctx.fill();
     rr(ctx, x - 18, y - 18, 36, 33, 6); ctx.fillStyle = on ? '#ece4d2' : '#a9a59a'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = K.edge; ctx.stroke();
     ctx.save(); ctx.translate(x - 3, y - 3); speaker(ctx, 1, on, on ? K.ink : '#4a4538'); ctx.restore();
@@ -2144,10 +2164,12 @@
     var bx = num(st.bx, 340), by = num(st.by, 46), bw = clamp(num(st.bw, 600), 40, 1280), bh = clamp(num(st.bh, 48), 20, 120);
     var tip = (st.tip && typeof st.tip === 'object') ? st.tip : null;
     var dDur = Math.max(0.01, num(st.doneDur, 0.6)), dT = clamp(num(st.doneT, dDur), 0, dDur), done = dT < dDur, dq = dT / dDur;
-    var a = done && dT > dDur - 0.2 ? (dDur - dT) / 0.2 : 1;
-    ctx.save(); ctx.globalAlpha *= clamp(a, 0, 1);
+    var a = done && dT > dDur - 0.2 ? (dDur - dT) / 0.2 : 1, al = clamp(num(st.alpha, 1), 0, 1);
+    // 指示箭頭不乘 alpha(它本來就貼著物件, 變淡會找不到); 完成特效期間不畫箭頭
+    if (tip && !done) { ctx.save(); tutArrow(ctx, tip, t); ctx.restore(); }
+    // 橫幅本體(文字、鍵帽、完成特效)乘 alpha: 關卡內碰到角色 / 怪物 / 素材 / 飛行物時 RD 傳 0.3
+    ctx.save(); ctx.globalAlpha *= clamp(a, 0, 1) * al;
     // 階段 '6' 的完成特效: RD 把橫幅框設在「按 ↓」泡泡上(200×48), 這裡照一般完成特效畫, 蓋在泡泡上
-    if (tip && !done) tutArrow(ctx, tip, t);
     rr(ctx, bx, by + 3, bw, bh, 8); ctx.fillStyle = 'rgba(10,6,4,0.45)'; ctx.fill();
     rr(ctx, bx, by, bw, bh, 8); ctx.fillStyle = done ? mix('#efe3c6', '#ffd84a', Math.min(1, dq * 3)) : K.parch; ctx.fill();
     ctx.lineWidth = 2.5; ctx.strokeStyle = done ? K.selectDeep : K.edge; ctx.stroke();

@@ -1,6 +1,12 @@
-# 連環工程 美術規格(polish 第 3 輪)
+# 連環工程 美術規格(polish 第 4 輪)
 
-本輪就地沿用 polish 第 2 輪的色票、形狀語言、版面骨架與所有物件畫法, 函式名不變、沒有新增或刪除函式。只改規格變動牽涉的部分:
+本輪就地沿用 polish 第 3 輪的色票、形狀語言、版面骨架與所有物件畫法, 函式名不變、沒有新增或刪除函式。只改規格變動牽涉的部分:
+- **劍士連按揮砍**(`drawPlayer` 新增 `swingIdx`): 新月刀光改成會「掃」的刀光——`swingIdx` 0 由上往下斬、1 由下往上斬, 刀鋒前緣一條白亮線 + 小星, 劍身跟著上下擺; 第一幀就已掃出約 1/3, RD 連按時把 poseT 歸 0 重播, 每一下都看得到出刀
+- **關卡疊加物讓路**(`drawTutorial`、`drawSoundIcon` 新增 `alpha`): 橫幅本體(文字、鍵帽、完成特效)與聲音圖示整體乘 alpha; **教學指示箭頭不乘**(永遠 1)。聲音圖示在第 4 關由 RD 改傳左上 (30,62), 畫法不變
+- **俯衝鷹**(`drawHawk`): return 的 angle 可能是 π(水平往左繞), 朝左半邊飛時身體上下鏡像, 眼睛與背保持朝上, 不會肚皮朝天
+- 介面其他改動已符合、未動畫法: 資訊列愛心 maxHp 3~6(6 顆時時鐘格到 x 1060, 未超出 1270); dive 終點十字本來就收在端點以內; 開始畫面環道 200 / 窗 70 就是上一輪實作
+
+以下為 polish 第 3 輪的改動紀錄(保留):
 - **爆風擊退**(`drawShockwave`, 原震波): 圓環改成往左右兩側推的兩道爆風, state `radius` → `left` / `right` / `halfH`
 - **炸彈範圍圈**(`drawBomb` 新增 `radius`、`danger`): 飛行中畫半徑 60 的範圍圈, 玩家在圈內轉紅閃爍
 - **預備投影**(`drawTelegraph`): 準星、十字、箭頭、線帽全部收在 RD 給的端點以內
@@ -62,9 +68,10 @@ RD 只需讀這份。`index.html` 必須宣告 `<meta charset="utf-8">`(art.js �
 
 - **P0 辨識度先於好看**: 三種擋路物 裂岩牆(暖色平板 + 裂痕)/ 亂石(冷色圓石堆、無裂痕)/ 封印石門(厚框 + 紫爪痕)用「材質 + 顏色」兩通道分出誰打得破; 三職業縮到 1/8 只剩盾形 / 三角 / 圓; 八種裝置縮到卡片裝置格的 17px 時拿掉鉚釘與細節, 只剩「色環 + 中心符號」。
 - **P1 視覺權重跟著決策迫切度走**: 炸彈範圍圈平常只是 0.35 不透明的淡虛線(不搶戲), 只有「現在炸開會打到自己」時才轉紅閃爍; 背景與地圖紙紋最低調(營地石板紋、河波紋都是極淡的線); 最亮的是危險投影(紅)、破綻(黃)與教學箭頭(金); 素材飛行投幣時只讓那一格資訊列壓扁、噴火花; 結算時「這一趟」(按 Z 會採用的)是全面板唯一有金色外光的欄, 「目前回放」只有淡虛線框。
-- **P2 規則上存在的東西畫面上必須存在**: 炸彈會炸到自己(本輪新規則), 所以炸彈飛行中一定畫出半徑 60 的範圍圈, 爆風擊退的特效邊界就是判定帶(left~right、y±40), 預備投影在牆面 / 平台邊緣截斷、不畫出實際打不到的地方; 未修的斷橋 / 崩梯每一格畫角色色施工藍圖; 盾兵的盾值接在血條前段; 花費逐項比對, 只有不足的那一種變紅 + 「缺 N」; 卡片縮圖上每處工程的區域都框出來(未修虛線 / 已修實線), 修好幾處一眼看得出; 卡片裝置格空著也畫空格(虛線 + 「+」), 看得出「這裡還能裝」; 倉庫清單每種標 ×N 座數; 冷卻環每 1 秒一刻。
+- **P1(本輪)**: 第 0、1 列開始有素材與怪物, 教學橫幅與聲音圖示碰到它們時退到 0.3 不透明, 讓玩家正在打 / 正在撿的東西壓過說明; 但教學箭頭不變淡——它就是在指那個物件, 是此刻決策的一部分。
+- **P2 規則上存在的東西畫面上必須存在**: 劍士每按一次就揮一次(本輪新規則), 所以刀光第一幀就看得到, 連按時上下交替, 一下一刀都有獨立的畫面; 炸彈會炸到自己(本輪新規則), 所以炸彈飛行中一定畫出半徑 60 的範圍圈, 爆風擊退的特效邊界就是判定帶(left~right、y±40), 預備投影在牆面 / 平台邊緣截斷、不畫出實際打不到的地方; 未修的斷橋 / 崩梯每一格畫角色色施工藍圖; 盾兵的盾值接在血條前段; 花費逐項比對, 只有不足的那一種變紅 + 「缺 N」; 卡片縮圖上每處工程的區域都框出來(未修虛線 / 已修實線), 修好幾處一眼看得出; 卡片裝置格空著也畫空格(虛線 + 「+」), 看得出「這裡還能裝」; 倉庫清單每種標 ×N 座數; 冷卻環每 1 秒一刻。
 - **P3 一個意義一種長相**: 四種素材全部呼叫同一個 `matIcon`, 聚X機關的中心符號也是它; 裝置在卡片格、準備頁、倉庫、商店、獲得提示、結算、商店卡招牌全部呼叫同一個 `itemIcon`; 號碼釘在工程牌與準備頁工程卡同款; 巢穴記號一律「發光紫紋」; 黃 = 破綻、紅 = 敵方預備、金 = 介面選中 / 可按 / 會被採用; 營地兩張建築卡的「!」與大標籤共用同一支小工具。
-- **P4 關鍵區分至少兩條通道**: 炸彈「會炸到你」vs「安全」= 紅色實線 + 淡紅面 + 0.25 秒閃爍 vs 淡暖白虛線、不閃(顏色 + 線型 + 動態); 爆風擊退 vs 炸彈爆炸 = 白色弧形前緣往兩側推的帶狀 vs 橘色實心火球圓; 我方 vs 敵方 = 白描邊幾何 vs 無描邊圓潤 + 紅瞳; 一般怪 vs 巢穴怪 = 紅瞳 vs 紫瞳 + 背上發光紫紋; 卡片修好 vs 沒修 = 原色 vs 灰階 + 實線框 vs 虛線框; 這一趟 vs 目前回放 = 金外光 + 吊牌 + 亮底 vs 虛線框 + 淡底 + 淡字; 職業已解鎖 vs 未解鎖 = 彩色 + 綠章 vs 灰色剪影 + 鎖; 全解鎖 vs 已售完 = 羊皮紙金邊 vs 灰紅底深字。
+- **P4 關鍵區分至少兩條通道**: 炸彈「會炸到你」vs「安全」= 紅色實線 + 淡紅面 + 0.25 秒閃爍 vs 淡暖白虛線、不閃(顏色 + 線型 + 動態); 爆風擊退 vs 炸彈爆炸 = 白色弧形前緣往兩側推的帶狀 vs 橘色實心火球圓; 劍士上斬 vs 下斬 = 刀鋒前緣移動方向 + 劍身擺向(位置 + 動態); 我方 vs 敵方 = 白描邊幾何 vs 無描邊圓潤 + 紅瞳; 一般怪 vs 巢穴怪 = 紅瞳 vs 紫瞳 + 背上發光紫紋; 卡片修好 vs 沒修 = 原色 vs 灰階 + 實線框 vs 虛線框; 這一趟 vs 目前回放 = 金外光 + 吊牌 + 亮底 vs 虛線框 + 淡底 + 淡字; 職業已解鎖 vs 未解鎖 = 彩色 + 綠章 vs 灰色剪影 + 鎖; 全解鎖 vs 已售完 = 羊皮紙金邊 vs 灰紅底深字。
 - **P7 每個元素都要掙得它的版面**: 資訊列素材格只剩圖示、持有數、每分鐘產量; 卡片拿掉「工程 N/3」字, 改由縮圖本身與木框彩度表達; 商店卡 / 升級所卡只放簡單圖示與名牌, 不列價格、剩餘、等級; 死亡與過關動畫沒有任何文字。
 - **P9 以最混亂的那一刻驗收**: 開始畫面以「頂端窗被掃到、光暈最大且彈跳放大」那一幀驗上緣 ≥ y 54, 以 0~4 秒每 0.025 秒掃一遍驗整組; 爆風擊退以「一側貼牆(left = x)、一側全長」驗不出帶; 縮圖倍率(<0.2)一律改畫剪影色塊; 自測對世界物件以 1 / 0.5 / 0.125 三種倍率跑過; 解鎖特效以「角色跳到最高、放射光最大」那一幀驗頭頂 ≥ y 64; 死亡碎片以「命中點在各方向 + 掉出畫面」驗不超過 160px。
 - **P13 事件要排隊**: 「獲得 裝置」提示固定一塊、淡入淡出, 由 RD 依序傳; 教學一次只畫一個階段; 解鎖特效畫在職業卡上、教學完成特效畫在橫幅上, 位置不重疊。
@@ -103,7 +110,7 @@ RD 只需讀這份。`index.html` 必須宣告 `<meta charset="utf-8">`(art.js �
 
 ## 6. 繪製順序補充
 
-照 interface notes 的順序即可。`drawSkillRing` 一次畫完整個環(沒有前後分層), 請在 `drawPlayer` 之前呼叫。`drawTutorial` 的箭頭會畫在橫幅外(依 tip), 請保持在 `drawHud` 之後、`drawSoundIcon` 之前。
+照 interface notes 的順序即可。`drawSkillRing` 一次畫完整個環(沒有前後分層), 請在 `drawPlayer` 之前呼叫。`drawTutorial` 的箭頭會畫在橫幅外(依 tip), 請保持在 `drawHud` 之後、`drawSoundIcon` 之前。`drawTutorial` 先畫箭頭(不乘 alpha)再畫橫幅(乘 alpha); 兩者都在函式內自己處理, RD 不必另設 `globalAlpha`(另設會連箭頭一起變淡)。
 
 - **死亡動畫**: 定格世界(不畫 drawPlayer / drawSkillRing / drawRangeRing / drawGoalPrompt / drawTutorial)→ `drawDeathFx` → `drawHud` →(1.3 秒後)`drawFailPanel` → `drawSoundIcon`。
 - **過關動畫**: RD 放大畫定格世界(drawPlayer 用 'cheer'、drawGoal 用 cheerT)→ 還原變換 → `drawClearIris`(畫布座標)→ `drawHud` →(1.4 秒後)`drawResultPanel` → `drawSoundIcon`。
@@ -130,7 +137,7 @@ RD 只需讀這份。`index.html` 必須宣告 `<meta charset="utf-8">`(art.js �
 | 寶箱 | `drawChest(ctx, s)` | x, y, open | 關 = 橘金箱 + 金帶金鎖 + 金色地光 + 閃星; 開 = 灰褐空箱、箱蓋立起、無光 |
 | 終點旗 | `drawGoal(ctx, s)` | x, y, reached, cheerT, cheerDur(1.4) | 白旗桿; 未到 = 金旗紅星飄動; reached = 旗揚起轉綠 + 白勾; 慶祝(cheerT < cheerDur)= 整段大幅揮動, 0.72 起旗頂噴 9 顆金 / 淡金星(往外 ≤ 40), 1.3 淡完 |
 | 完成提示 | `drawGoalPrompt(ctx, s)` | x, y, first, t | 羊皮紙泡泡 200×48(底邊 y−8)+ 尖端 (x, y−2); 「按 [↓] 完成關卡」18px, 鍵帽輕彈; 泡泡左右夾在 8~1272; first = 金框 + 1.15 倍 + 0.8 秒脈動 |
-| 玩家 | `drawPlayer(ctx, s)` | x, y, cls, facing, pose, poseT, invuln, stealth, stealthT, stealthDur, unstealthT, unstealthDur | 劍士倒梯形藍盾身 + 方盔 + 紅披風 + 直劍; 獵人綠尖錐斗篷 + 兜帽兩點亮眼 + 弓; 炸彈工橘圓桶 + 大護目鏡 + 手持炸彈。run 擺腿; rise 收腿; fall 張腿; slash 劍平舉 + 面向側新月刀光(0.15 秒); dash 前傾 + 反方向速度線 ≤60; throw 手前伸; wave 蹲低雙手張開; hurt 紅身後仰; cheer 舉武器 + 頭頂小金星, poseT 0.72~0.86 整個人往上跳 ≤15px; invuln 閃爍; stealth 本體 0.35 + 青白虛線殼, 最後 0.5 秒殼閃爍; 現身 = 外擴白環 + 6 星 ≤12 |
+| 玩家 | `drawPlayer(ctx, s)` | x, y, cls, facing, pose, poseT, swingIdx, invuln, stealth, stealthT, stealthDur, unstealthT, unstealthDur | 劍士倒梯形藍盾身 + 方盔 + 紅披風 + 直劍; 獵人綠尖錐斗篷 + 兜帽兩點亮眼 + 弓; 炸彈工橘圓桶 + 大護目鏡 + 手持炸彈。run 擺腿; rise 收腿; fall 張腿; slash 面向側新月刀光(0.15 秒, 外弧 48×19 / 內弧 28×8, 收在框外 50×40): **swingIdx 0 = 刀鋒由上往下掃、1 = 由下往上掃**(只認 1, 其他值當 0), 前緣白亮線 + 小星, 第一幀已掃出約 1/3、0.075 秒掃到底, 尾端隨後收掉並淡出; 劍身同步繞護手上下擺 ±0.6 rad(劍尖仍在框內); poseT 歸 0 即從頭重播; dash 前傾 + 反方向速度線 ≤60; throw 手前伸; wave 蹲低雙手張開; hurt 紅身後仰; cheer 舉武器 + 頭頂小金星, poseT 0.72~0.86 整個人往上跳 ≤15px; invuln 閃爍; stealth 本體 0.35 + 青白虛線殼, 最後 0.5 秒殼閃爍; 現身 = 外擴白環 + 6 星 ≤12 |
 | 技能冷卻環 | `drawSkillRing(ctx, s)` | x, y(腳底中點), cls, cdT, cdDur, readyT, readyDur, castT, castDur, denyT, denyDur, stealthLeft, stealthDur | 貼地橢圓 56×16; 冷卻 = 深軌道 + 職業色由後方順時針長滿 + 每秒一刻; 最後 0.35 秒轉金 + 亮邊; 可用 = 靜止金環 + 淡金地光; 剛好 = 閃白轉金 + 波紋(≤88×28)+ 6 金星上飄 ≤30; 施放 = 金環脹開淡出(≤80×24); 拒絕 = 左右抖 ±3 + 閃紅; 潛行 = 內圈虛線(長度 = 剩餘比例)。不寫數字 |
 | 射程圈 | `drawRangeRing(ctx, s)` | x, y, radius | 獵人綠半透明虛線圈 |
 | 血條 | `drawHpBar(ctx, s)` | x, y(血條底邊), hp, maxHp, shield, maxShield, chip, chipT, chipDur, big, weak, shieldSide | 圓角連續條, 寬 min(96, max(16, 6×總量+4)), 高 5 / big 7; 盾值段(藍灰)在 shieldSide 那一側、血量段(紅)在另一側, 中間深色分隔: **shieldSide 只有 `=== 1` 時盾值段在右**(整條以 x 為軸左右鏡像, 剛扣段的白色縮回方向跟著鏡像), 沒傳或其他值都在左; 剛扣段白色縮回; weak 血量段轉黃 + 黃描邊 |
@@ -139,7 +146,7 @@ RD 只需讀這份。`index.html` 必須宣告 `<meta charset="utf-8">`(art.js �
 | 射手蜂 | `drawShooterBee(ctx, s)` | x, y, facing, state, flingDir, hit, brood, t | fly 拍翅; aim 前傾轉橘 + 尾針紅光脈動; flung |
 | 刺藤花 | `drawThorn(ctx, s)` | x, y, facing, state, stateT, hit, brood, t | idle 擺動; windup 藤鞭往後拉 + 花瓣張開 + 紅尖; whip 藤鞭沿地甩到面向側(至多框外 137)+ 揮痕; recover 藤鞭垂在地上 |
 | 岩角羊 | `drawRam(ctx, s)` | x, y, facing, state, flingDir, hit, brood, t | walk; windup 低頭 + 後蹄刨地; butt 前傾 + 速度線; stagger 搖晃 + 螺旋眼 + 星; flung |
-| 俯衝鷹 | `drawHawk(ctx, s)` | x, y, facing, state, flingDir, angle, hit, brood, t | circle 拍翅; hover 翅膀高舉 + 爪下伸; dive 收翅箭形朝 angle(縮放收進框內); return 半展翅朝 angle; flung |
+| 俯衝鷹 | `drawHawk(ctx, s)` | x, y, facing, state, flingDir, angle, hit, brood, t | circle 拍翅; hover 翅膀高舉 + 爪下伸; dive 收翅箭形朝 angle(縮放收進框內); return 半展翅朝 angle(往上 −π/2、往右 0、往左 π 都可); 朝左半邊時上下鏡像, 眼睛與背永遠朝上; flung |
 | 落石蜥 | `drawLizard(ctx, s)` | x, y, facing, state, hit, brood, t | 倒掛, 腳抓天花板; crawl 擺腳; windup 尾巴捲石; throw 尾巴下甩 |
 | 敵方投石 | `drawRockShot(ctx, s)` | x, y, t, kind | 不規則石塊旋轉 + 紅色危險描邊; lizard 褐灰、spit 藍灰 |
 | 盾兵 | `drawShieldman(ctx, s)` | x, y, facing, state, flingDir, hit, brood, t, hasShield, breakT, breakDur | 有盾 = 面向側藍色大盾; block 盾閃白 + 黃火花; 盾已破 = 身體露出橘色 + 殘把手 + 怒眉; breakT 盾碎白環 + 5 片碎盾噴開 ≤24 |
@@ -157,9 +164,9 @@ RD 只需讀這份。`index.html` 必須宣告 `<meta charset="utf-8">`(art.js �
 | 浮字 / 連鎖字 | `drawPopup` / `drawChainText` | x, y, t, dur, kind, value / x, y, n, t, dur | 素材圖示 +「+N」(素材亮色深描邊)上移 30 淡出 / 金色「n 連鎖」彈到 1.3 倍上移淡出 |
 | 裝置圖示 | `drawItemIcon(ctx, s)` | x, y, type, size(16~150) | devices C 嵌牆圓盤機關: 灰紫方石座(描邊收在框內)+ 四角鉚釘 + 外環 + 深色凹盤 + 中心符號。bagWood 聚木 / bagStone 聚石 / bagCrystal 聚晶 / coreLamp 聚核 = 該素材色環 + 四個向內凹口 + 該素材圖示; glove 拾遺 = 金環 + 白色 U 形磁鐵 + 金星; horn 驅獸 = 橘環 + 象牙號角; heart 巢心 = 紫環 + 外擴 ≤4px 紫光 + 金邊紫心; gear 疾時 = 銅色齒環 + 白色 ▶▶。畫面上 < 24px 時拿掉鉚釘、石座亮邊與素材細節 |
 | 獲得提示 | `drawItemNotice(ctx, s)` | type, t, dur | (440,100) 400×44 羊皮紙 + 金框(巢心機關紫框), 圖示 +「獲得 <裝置名>」(聚木機關 … 疾時機關), 前 0.2 淡入、後 0.3 淡出 |
-| 資訊列 | `drawHud(ctx, s)` | mode, stock, ratePerMin, bumpT, bumpDur, time, hp, maxHp | 0~40 木板條; 四格羊皮紙(x=16/186/356/526, 寬 162): 圖示(中心 x+20, y 20)、持有數、右對齊「+x.x/分」; bump 中整格壓扁 0.85 + 圖示壓扁 + 數字 1.3 倍 + 火花; level 再畫愛心格(724 起, maxHp 顆)與時鐘格「xx.xs」 |
-| 聲音開關 | `drawSoundIcon(ctx, s)` | x, y, on | 36×36 石鍵帽; 開 = 米白帽 + 喇叭聲波; 關 = 灰帽 + 喇叭打叉(不用紅); 右下角小字「M」10px |
-| 新手教學 | `drawTutorial(ctx, s)` | stage, text, keys, pressed, bx, by, bw, bh, tip, doneT, doneDur, t | 羊皮紙橫幅(左側金條)+ 文字 18/20px + 鍵帽; pressed 的鍵帽金頂 + 綠勾; tip = 金色粗箭頭(長 36 寬 24), 0.8 秒沿指向軸往後彈 6px; 完成 = 橫幅轉金 + 右端綠色打勾章蓋下 + 6 金星噴 ≤40, 最後 0.2 秒淡出。階段 '6' 也照這套畫(橫幅框 = 泡泡位置, 見判讀約定 10) |
+| 資訊列 | `drawHud(ctx, s)` | mode, stock, ratePerMin, bumpT, bumpDur, time, hp, maxHp | 0~40 木板條; 四格羊皮紙(x=16/186/356/526, 寬 162): 圖示(中心 x+20, y 20)、持有數、右對齊「+x.x/分」; bump 中整格壓扁 0.85 + 圖示壓扁 + 數字 1.3 倍 + 火花; level 再畫愛心格(724 起, maxHp 顆, 3~6; 6 顆時愛心格 724~912)與時鐘格「xx.xs」(接在愛心格後 30px) |
+| 聲音開關 | `drawSoundIcon(ctx, s)` | x, y, on, alpha | 36×36 石鍵帽; 開 = 米白帽 + 喇叭聲波; 關 = 灰帽 + 喇叭打叉(不用紅); 右下角小字「M」10px。中心 (x,y): 預設 (1250,62), 第 4 關關卡內 (30,62), 畫法不隨位置改變。alpha(0~1, 沒傳 = 1)整個圖示乘上去 |
+| 新手教學 | `drawTutorial(ctx, s)` | stage, text, keys, pressed, bx, by, bw, bh, tip, doneT, doneDur, t, alpha | **alpha**(0~1, 沒傳 = 1)只乘在橫幅本體(底、文字、鍵帽、打勾章、金星), 指示箭頭永遠不透明; 完成特效最後 0.2 秒的淡出再乘上去。羊皮紙橫幅(左側金條)+ 文字 18/20px + 鍵帽; pressed 的鍵帽金頂 + 綠勾; tip = 金色粗箭頭(長 36 寬 24), 0.8 秒沿指向軸往後彈 6px; 完成 = 橫幅轉金 + 右端綠色打勾章蓋下 + 6 金星噴 ≤40, 最後 0.2 秒淡出。階段 '6' 也照這套畫(橫幅框 = 泡泡位置, 見判讀約定 10) |
 | 地圖連線 | `drawMapLink(ctx, s)` | x1, y1, x2, y2, lit | S 形曲線; lit 金色粗線 + 外光; 暗 = 灰虛線 |
 | 關卡卡片 | `drawLevelCard(ctx, s)` | x, y(左上), index, name, theme, state, cost, stock, need, rates, recordCls, recordTime, repairedCount, siteCount, devices | 木框依主題染色(第 8 關粉紫雙框 + 角落斷門紋); **siteCount=3 且 open / cleared 時木框底色 = 灰褐 `#46423d` 與主題框色依 repairedCount/3 混色**; sealed 壓暗 + 灰鎖 + 花費 / 第 8 關畫斷門剪影 +「還差 N 關」; buyable 金虛線框 + 金鎖 + 花費(不足紅); open 米色框、縮圖區鋪深底等 RD 疊縮圖、「未過關」; cleared 綠框、名稱 + 職業記號 + 秒數 / 四種產量(收在 x+120 內, 判讀約定 14)。**不畫「工程 N/3」**。devices(長度 2 或 null): 卡片內 (123,108)、(146,108) 各 21×24 凹槽: null = 深色凹槽 + 虛線框 + 淡色「+」; 有值 = 較亮凹槽 + 裝置圖示 17px; devices = null(sealed / buyable)不畫格 |
 | 卡片上層 | `drawCardOverlay(ctx, s)` | x, y, speedMul, newArea, selected, replayP, marks, regions | **最先畫修復灰幕**(regions 長度 3 且不是全修): 縮圖內除已修 rects 外全部去色 + 霧面灰 + 舊照片細斜紋; 未修 rect = 灰白虛線框(線在內側); 已修 rect = 原色 + 暖白實線框 + 外側淡光暈(≤2px)+ 左上 / 右下兩顆小星; 全部裁在縮圖內; regions 長度 0 或 3 項全修 → 不畫。之後: 縮圖外框(內部透明); speedMul>1 右上銅色徽章(疾時機關小圖示)「×1.25」; newArea 左上橘色「新區域」; 回放進度條 + 素材色點 + 白色播放頭; selected 金框(框外 4~6)+ 頂端吊牌三角 |
@@ -219,6 +226,15 @@ RD 只需讀這份。`index.html` 必須宣告 `<meta charset="utf-8">`(art.js �
 | 開始畫面 / 結局 / 背景 | 1280×720 | 剪裁在畫布內 |
 
 ## 9. 自查紀錄
+
+### polish 第 4 輪
+- `node --check` 通過; 匯出 draw 函式與 interface.json 一一對應(0 缺、0 多); `Art.canvas` = 1280×720(上一版沒有依裝置加寬, 照舊固定寬)
+- 假 ctx(追蹤變換、外接框、fillText 字串 / 顏色 / 不透明度)共 698 次呼叫, 0 拋錯、save/restore 全成對、globalAlpha 不外漏: 全部匯出函式各餵 undefined / null / 空物件 / 全 NaN
+- 劍士 slash: swingIdx 0 / 1 × 面向 ±1 × poseT 0~0.2 每 0.01, 外框全在判定框 + 面向側 50×40 內; 每個 poseT < 0.15 都有刀鋒前緣; 0 的前緣由上半到下半、1 由下半到上半; 3 職業 × 10 pose × swingIdx(0 / 1 / 7 / −1 / 字串 / null)不拋錯
+- 教學 alpha 1 / 0.3 / 0.65 × doneT 0.6 / 0 / 0.3 / 0.5: 箭頭每一筆不透明度都是 1、完成特效中不畫箭頭; 橫幅每一筆與文字都等於 alpha × 淡出值; 17 個階段代號 × doneT 0~0.6 每 0.1 不拋錯; 階段 13 新字串「自動索敵射箭, 按 X 潛行, 怪物看不見你」畫出且收在橫幅 (340~940) 內
+- 聲音圖示 (1250,62) / (30,62) × alpha 1 / 0.3 × 開 / 關: 每一筆不透明度 = alpha, 外框在 36×36 內, 都有「M」
+- 俯衝鷹 return angle 0 / π / −π/2 / ±2.5: 外框在 40×28 內; angle 0 與 π 的眼睛都在身體中線上方
+- 資訊列數值回讀: maxHp 3~6 × hp 0~max, 實心紅愛心數 = hp; 「12.3s」在愛心格之後、1270 之內; 四格持有數 11 / 22 / 33 / 44 各在自己格內、水晶產量「+3.3/分」在水晶格
 
 ### polish 第 3 輪
 - `node --check` 通過; 匯出表的 draw 函式與 interface.json 一一對應(0 缺、0 多, 本輪沒有新增 / 刪除函式); `Art.canvas` = 1280×720(上一版沒有依裝置加寬, 照舊固定寬)

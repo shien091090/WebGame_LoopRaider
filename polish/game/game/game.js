@@ -170,7 +170,7 @@ function newGame() {
     res: null, pendingRec: null, resLevel: -1,
     lockT: 0, lockFn: null, clearedAny: false, bossBeaten: false, ending: null, kills: 0,
     tot: { run: zeros(), replay: zeros(), clearBonus: zeros() },
-    musicNow: null, timers: [], muted: false, endTime: 0
+    musicNow: null, timers: [], muted: false, endTime: 0, fTut: 1, fSnd: 1
   };
   R = null; SOL = null; thumbCache = {};
   tutReset();
@@ -374,7 +374,7 @@ function tutView() {
       } else { s.text = '按 Z 進升級所'; s.keys = ['z']; banner(440, 648, 600, 40); s.tip = { x: 150, y: 146, dir: 'down' }; }
       break;
     case '12': txt1(STAGE_TEXT['12']); banner(340, 532, 600, 48); s.tip = { x: 416 + 224 * P.clsSel, y: 246, dir: 'down' }; break;
-    case '13': s.text = '自動射箭, 按 X 潛行穿過怪物'; s.keys = ['x']; banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 24, dir: 'down' }; break;
+    case '13': s.text = '自動索敵射箭, 按 X 潛行, 怪物看不見你'; s.keys = ['x']; banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 24, dir: 'down' }; break;
     case '13b': s.text = '按 Z 丟炸彈, 紅圈內會炸到自己'; s.keys = ['z']; banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 24, dir: 'down' }; break;
     case '13c': s.text = '按 X 爆風擊退'; s.keys = ['x']; banner(340, 46, 600, 48); s.tip = { x: p.x, y: p.y - 24, dir: 'down' }; break;
     case '14':
@@ -389,6 +389,7 @@ function tutView() {
       if (wb) s.tip = { x: wb.x, y: wb.y - wb.h / 2 - 4, dir: 'down' };
       break;
   }
+  if (s.bx === 340 && s.by === 46) s.alpha = G.fTut; // 關卡內第 1 列橫幅: 碰到物件時變淡(規則 1)
   if (T.effId) s.doneT = Math.min(0.6, T.effT);
   else s.doneT = 0.6;
   if (s.keys.length && !s.pressed.length) s.pressed = s.keys.map(function () { return false; });
@@ -544,7 +545,7 @@ function newMon(d) {
   else if (d.type === 'bee') m.state = 'fly';
   else if (d.type === 'thorn') m.state = 'idle';
   else if (d.type === 'beetle') m.state = 'crawl';
-  else if (d.type === 'hawk') { m.state = 'circle'; m.dir = 1; }
+  else if (d.type === 'hawk') { m.state = 'circle'; m.dir = 1; m.homeX = d.x; m.homeY = d.y; m.by = d.y; }
   else if (d.type === 'lizard') { m.state = 'crawl'; m.cd = 0.5; m.ceilY = d.y - 12; }
   else if (d.type === 'mother') { m.state = 'walk'; m.cd = 2.0; }
   return m;
@@ -559,7 +560,7 @@ function startRun(l, cls) {
   R = {
     l: l, cls: cls, L: L, rep: rep.slice(), f: 0, state: 'run', cT: 0, deadT: 0, dead: null, focus: null, irisSnd: false, shatterDone: false, atkId: 0,
     p: { x: L.start.x, y: L.start.y, w: PW, h: PH, vx: 0, vy: 0, facing: 1, onGround: false, hp: hp, inv: 0, kb: 0, kbDir: 0, kbSpd: 80 / 0.15, hurtT: 0,
-      pose: 'idle', poseT: 0, actPose: null, actT: 0, dashT: 0, dashUsed: false, dashHit: {}, dashCr: {}, atkCd: 0, skCd: 0, skDur: 1.2,
+      pose: 'idle', poseT: 0, actPose: null, actT: 0, dashT: 0, dashUsed: false, dashHit: {}, dashCr: {}, atkCd: 0, swingIdx: 0, reslash: false, skCd: 0, skDur: 1.2,
       stealth: false, stealthT: 2.5, unT: 0.3, autoCd: 0.3, coyote: 0, jumpBuf: 0, jumpT: 99, readyT: 0.5, castT: 0.3, denyT: 0.25, prevCd: 0, skKill: false, fallV: 0 },
     mons: [], groups: [], arrows: [], bombs: [], shots: [], rocks: [], expl: [], waves: [], poofs: [], popups: [], chains: {}, chainTexts: [], bits: [],
     crHp: L.cracks.map(function () { return 3; }), taken: {}, chestOpen: G.chestTaken[l], chestF: -1, gotItems: [], notice: null, noticeQ: [], gotHeart: false,
@@ -587,7 +588,7 @@ function startRun(l, cls) {
   });
   if (l === 7) R.boss = newBoss();
   R.p.skDur = skillDur(cls);
-  var pk = (cls === 'hunter') ? 2.0 : 0;
+  R.snd = soundCorner(L); G.fTut = 1; G.fSnd = 1;
   R.frames.push(snap());
   G.screen = 'play'; G.paused = false;
   clearKeys();
@@ -715,7 +716,7 @@ function flingMon(m, dir, atk) {
 function endFling(m) {
   m.fl = null; m.vx = 0; m.vy = 0;
   if (m.type === 'bee') { m.state = 'fly'; m.sx = m.x; m.sy = m.y; m.t2 = 0; }
-  else if (m.type === 'hawk') { m.state = 'circle'; m.sx = m.x; m.sy = m.y; }
+  else if (m.type === 'hawk') { m.state = 'circle'; m.ang = 0; m.sx = m.x; m.sy = m.y; m.by = m.y; }
   else if (m.type === 'frog') { m.state = 'crouch'; m.t = 0.6; }
   else if (m.type === 'bat') { m.state = 'fly'; m.ret = true; }
   else if (m.type === 'beetle') { m.state = 'crawl'; }
@@ -846,7 +847,8 @@ function stepPlayer() {
   else if (p.dashT > 0) pose = 'dash';
   else if (!p.onGround) pose = p.vy < 0 ? 'rise' : 'fall';
   else pose = Math.abs(p.vx) > 1 && p.kb <= 0 ? 'run' : 'idle';
-  if (pose !== p.pose) { p.pose = pose; p.poseT = 0; } else p.poseT += DT;
+  if (pose !== p.pose || (p.reslash && pose === 'slash')) { p.pose = pose; p.poseT = 0; } else p.poseT += DT;
+  p.reslash = false;
   p.skDur = skillDur(cls);
 }
 function tutPressed(dir) {
@@ -861,10 +863,9 @@ function fireArrow(ang, atk) {
 function setAct(name, t) { R.p.actPose = name; R.p.actT = t; }
 function doAttack() {
   var p = R.p, f = p.facing;
-  if (p.dashT > 0) return;
   if (R.cls === 'sword') {
-    if (p.atkCd > 0) return;
-    p.atkCd = 0.2; setAct('slash', 0.15); snd('slash');
+    // 劍士沒有攻擊間隔: 每次 Z 按下(非自動連發)就揮一次; 動作沒播完又按 → poseT 歸 0 重播、刀光上下交替; 衝刺中也能揮
+    p.swingIdx ^= 1; p.reslash = true; setAct('slash', 0.15); sndT('slash', 0.05);
     var x0 = f > 0 ? p.x + 14 : p.x - 14 - 50, atk = ++R.atkId, cx = x0 + 25, d = 1 + atkB();
     R.mons.forEach(function (m) {
       if (m.alive && ovl(cx, p.y, 50, 40, m.x, m.y, m.w, m.h)) dmgMon(m, d, { kind: 'slash', fx: p.x, cy: p.y, atk: atk, blockable: true, pl: true });
@@ -874,7 +875,7 @@ function doAttack() {
     });
     if (R.boss) bossHitTest(function (b) { return ovl(cx, p.y, 50, 40, b.x, b.y, b.w, b.h); }, d);
   } else if (R.cls === 'bomber') {
-    if (p.atkCd > 0) return;
+    if (p.dashT > 0 || p.atkCd > 0) return;
     p.atkCd = 0.6; setAct('throw', 0.2); snd('bomb_throw');
     R.bombs.push({ x: p.x + f * 14, y: p.y - 8, vx: f * 300, vy: -500, t: 0, atk: ++R.atkId });
     tutDone('13b');
@@ -922,6 +923,8 @@ function monFloor(m) {
   return hd;
 }
 function faceP(m) { m.facing = R.p.x >= m.x ? 1 : -1; }
+// 規則 35b: 獵人潛行中所有怪物都發現不到玩家(視為不在任何索敵範圍內)
+function hid() { return !!R.p.stealth; }
 function beetleBlast(m, killed) {
   if (killed) {
     if (m.hp > 0) gain('crystal', m.hp, 'dmg', m.x, m.y);
@@ -954,7 +957,7 @@ function stepFling(m) {
 var FROG_V0 = Math.sqrt(2 * GRAV * 80), FROG_VX = 120 / (2 * FROG_V0 / GRAV);
 function frogPlan(m) {
   var p = R.p, dir = m.facing, tries = 0, res = null;
-  if (Math.hypot(p.x - m.x, p.y - m.y) <= 300) dir = (p.x - m.x) >= 0 ? 1 : -1;
+  if (!hid() && Math.hypot(p.x - m.x, p.y - m.y) <= 300) dir = (p.x - m.x) >= 0 ? 1 : -1;
   while (tries < 2) {
     var lx = m.x + dir * 120, col = Math.floor(lx / TS), r0 = Math.floor((m.y + m.h / 2) / TS), ground = false, ly = m.y + m.h / 2, k;
     for (k = 0; k <= 6; k++) if (isSol(SOL, col, r0 + k)) { ground = true; ly = (r0 + k) * TS; break; }
@@ -977,7 +980,7 @@ function stepMon(m) {
       if (m.state === 'walk') {
         if (m.onGround && !groundAhead(m, m.facing)) m.facing *= -1;
         if (moveX(m, 80 * m.facing * DT)) m.facing *= -1;
-        if (m.onGround && Math.abs(dy) <= 40 && dx * m.facing > 0 && Math.abs(dx) <= 240) { setSt(m, 'windup', 0.5); m.lane = laneDist(m, m.facing, 240); snd('windup'); }
+        if (!hid() && m.onGround && Math.abs(dy) <= 40 && dx * m.facing > 0 && Math.abs(dx) <= 240) { setSt(m, 'windup', 0.5); m.lane = laneDist(m, m.facing, 240); snd('windup'); }
       } else if (m.state === 'windup') { m.t -= DT; if (m.t <= 0) { setSt(m, 'charge', 0); m.dist = 0; } }
       else if (m.state === 'charge') {
         if (chargeStep(m, 420)) setSt(m, 'stun', 1);
@@ -996,8 +999,8 @@ function stepMon(m) {
     case 'thorn':
       monFloor(m);
       if (m.state === 'idle') {
-        m.facing = dx >= 0 ? 1 : -1;
-        if (Math.abs(dx) <= 140 && Math.abs(dy) <= 60) { setSt(m, 'windup', 0.6); m.sw = sweepWidth(m); snd('windup'); }
+        if (!hid()) m.facing = dx >= 0 ? 1 : -1;
+        if (!hid() && Math.abs(dx) <= 140 && Math.abs(dy) <= 60) { setSt(m, 'windup', 0.6); m.sw = sweepWidth(m); snd('windup'); }
       } else if (m.state === 'windup') { m.t -= DT; if (m.t <= 0) setSt(m, 'whip', 0.3); }
       else if (m.state === 'whip') {
         var zx = m.facing > 0 ? m.x + 20 : m.x - 20 - m.sw, gy = m.y + m.h / 2;
@@ -1010,7 +1013,7 @@ function stepMon(m) {
       if (m.state === 'walk') {
         if (m.onGround && !groundAhead(m, m.facing)) m.facing *= -1;
         if (moveX(m, 70 * m.facing * DT)) m.facing *= -1;
-        if (m.onGround && Math.abs(dy) <= 40 && dx * m.facing > 0 && Math.abs(dx) <= 200) { setSt(m, 'windup', 0.6); m.lane = laneDist(m, m.facing, 160); snd('windup'); }
+        if (!hid() && m.onGround && Math.abs(dy) <= 40 && dx * m.facing > 0 && Math.abs(dx) <= 200) { setSt(m, 'windup', 0.6); m.lane = laneDist(m, m.facing, 160); snd('windup'); }
       } else if (m.state === 'windup') { m.t -= DT; if (m.t <= 0) { setSt(m, 'butt', 0); m.dist = 0; } }
       else if (m.state === 'butt') {
         if (chargeStep(m, 300)) setSt(m, 'stagger', 0.8);
@@ -1020,7 +1023,7 @@ function stepMon(m) {
     case 'lizard': stepLizard(m); break;
     case 'shield':
       monFloor(m);
-      if (Math.abs(dx) <= 400 && Math.abs(dy) <= 120) {
+      if (!hid() && Math.abs(dx) <= 400 && Math.abs(dy) <= 120) {
         m.facing = dx >= 0 ? 1 : -1;
         if (Math.abs(dx) > 8 && (!m.onGround || groundAhead(m, m.facing))) moveX(m, 40 * m.facing * DT);
       } else {
@@ -1031,11 +1034,11 @@ function stepMon(m) {
     case 'beetle':
       monFloor(m);
       if (m.state === 'crawl') {
-        var near = Math.hypot(dx, dy) <= 300, spd = near ? 70 : 40;
+        var near = !hid() && Math.hypot(dx, dy) <= 300, spd = near ? 70 : 40;
         if (near) m.facing = dx >= 0 ? 1 : -1;
         if (m.onGround && !groundAhead(m, m.facing)) { if (near) { /* 不離開平台 */ } else m.facing *= -1; }
         else if (moveX(m, spd * m.facing * DT) && !near) m.facing *= -1;
-        if (Math.hypot(dx, dy) <= 50) { setSt(m, 'fuse', 0.8); snd('beetle_fuse'); }
+        if (!hid() && Math.hypot(dx, dy) <= 50) { setSt(m, 'fuse', 0.8); snd('beetle_fuse'); }
       } else if (m.state === 'fuse') {
         m.t -= DT;
         if (m.t <= 0) beetleBlast(m, false);
@@ -1052,12 +1055,14 @@ function frogJump(m) {
 function stepBee(m) {
   var p = R.p;
   m.t2 += DT;
-  var inRange = Math.hypot(p.x - m.x, p.y - m.y) <= 400;
+  var inRange = !hid() && Math.hypot(p.x - m.x, p.y - m.y) <= 400;
   if (m.state === 'aim') {
-    m.facing = p.x >= m.x ? 1 : -1;
+    // 瞄準點跟著玩家; 潛行開始那一刻起凍結在當時的玩家中心
+    if (!hid()) { m.aimX = p.x; m.aimY = p.y; }
+    m.facing = m.aimX >= m.x ? 1 : -1;
     m.t -= DT;
     if (m.t <= 0) {
-      var dx = p.x - m.x, dy = p.y - m.y, d = Math.max(1, Math.hypot(dx, dy));
+      var dx = m.aimX - m.x, dy = m.aimY - m.y, d = Math.max(1, Math.hypot(dx, dy));
       R.shots.push({ x: m.x, y: m.y, vx: dx / d * 220, vy: dy / d * 220, life: 4 });
       snd('bee_shot');
       setSt(m, 'fly', 0); m.cd = 1.6;
@@ -1065,34 +1070,58 @@ function stepBee(m) {
   } else {
     if (moveX(m, 60 * m.facing * DT)) m.facing *= -1;
     if (m.x - m.sx >= 120) m.facing = -1; else if (m.x - m.sx <= -120) m.facing = 1;
-    if (inRange) { m.cd -= DT; if (m.cd <= 0) setSt(m, 'aim', 0.4); }
+    if (inRange) { m.cd -= DT; if (m.cd <= 0) { setSt(m, 'aim', 0.4); m.aimX = p.x; m.aimY = p.y; } }
   }
   m.y = m.sy + 16 * Math.sin(Math.PI * m.t2);
 }
+// 俯衝鷹(polish 第 4 輪 bug: 穿牆): 判定框(40×28)任何時刻都不進入實心格。
+// 沿線掃描: 從 (x, y) 朝 (tx, ty) 以最多 2px 一步前進, 最多走 maxLen; 下一步判定框會碰到實心格就停在碰撞前的位置。
+// 預告軌跡終點與實際俯衝都用這一支(實際俯衝每幀從目前位置續掃, 與預告相差 ≤ 2px)
+function hawkSweep(x, y, tx, ty, maxLen) {
+  var d = Math.hypot(tx - x, ty - y), len = Math.min(d, maxLen);
+  if (len <= 0.0001) return { x: x, y: y, hit: false, reached: d <= 0.0001 };
+  var ux = (tx - x) / d, uy = (ty - y) / d, pos = 0, st;
+  while (pos < len - 0.0001) {
+    st = Math.min(2, len - pos);
+    if (boxHit(x + ux * (pos + st), y + uy * (pos + st), 40, 28)) return { x: x + ux * pos, y: y + uy * pos, hit: true, reached: false };
+    pos += st;
+  }
+  return { x: x + ux * len, y: y + uy * len, hit: false, reached: len >= d - 0.0001 };
+}
+function hawkEndReturn(m) { setSt(m, 'circle', 0); m.ang = 0; m.sx = m.x; m.by = m.y; }
 function stepHawk(m) {
-  var p = R.p, dx = p.x - m.x;
+  var p = R.p, dx = p.x - m.x, nx, ny;
   m.lock = Math.max(0, m.lock - DT);
   if (m.state === 'circle') {
-    m.x += 90 * m.dir * DT;
+    m.ang = 0;
+    // 水平來回: 下一步會碰到實心格就折返(不移動)
+    nx = m.x + 90 * m.dir * DT;
+    if (boxHit(nx, m.y, m.w, m.h)) m.dir = -m.dir; else m.x = nx;
     if (m.x - m.sx >= 100) m.dir = -1; else if (m.x - m.sx <= -100) m.dir = 1;
-    m.facing = m.dir; m.y = m.sy + 4 * Math.sin(m.anim * 2);
-    if (m.lock <= 0 && p.y > m.y && Math.abs(dx) <= 320) { setSt(m, 'hover', 0.7); m.lockX = p.x; m.lockY = p.y; }
+    m.facing = m.dir;
+    // 上下 ±4px 擺動: 會碰到實心格, 那一幀不擺
+    ny = m.by + 4 * Math.sin(m.anim * 2);
+    if (!boxHit(m.x, ny, m.w, m.h)) m.y = ny;
+    if (!hid() && m.lock <= 0 && p.y > m.y && Math.abs(dx) <= 320) { setSt(m, 'hover', 0.7); m.lockX = p.x; m.lockY = p.y; }
   } else if (m.state === 'hover') {
+    m.ang = 0;
     m.t -= DT; m.facing = m.lockX >= m.x ? 1 : -1;
     if (m.t <= 0) { setSt(m, 'dive', 0); m.ang = Math.atan2(m.lockY - m.y, m.lockX - m.x); snd('hawk_dive'); }
   } else if (m.state === 'dive') {
-    var ddx = m.lockX - m.x, ddy = m.lockY - m.y, d = Math.hypot(ddx, ddy), st = 520 * DT;
-    m.ang = Math.atan2(ddy, ddx);
-    if (d <= st) { m.x = m.lockX; m.y = m.lockY; setSt(m, 'return', 0); m.lock = 1.0; m.sx = m.x; }
-    else {
-      var ox = m.x, oy = m.y;
-      m.x += ddx / d * st; m.y += ddy / d * st;
-      if (boxHit(m.x, m.y, m.w, m.h)) { m.x = ox; m.y = oy; setSt(m, 'return', 0); m.lock = 1.0; m.sx = m.x; }
-    }
+    m.ang = Math.atan2(m.lockY - m.y, m.lockX - m.x);
+    var sw = hawkSweep(m.x, m.y, m.lockX, m.lockY, 520 * DT);
+    m.x = sw.x; m.y = sw.y;
+    if (sw.hit || sw.reached) { setSt(m, 'return', 0); m.lock = 1.0; }
   } else if (m.state === 'return') {
-    m.ang = -Math.PI / 2;
-    m.y -= 200 * DT;
-    if (m.y <= m.sy) { m.y = m.sy; setSt(m, 'circle', 0); m.dir = dx >= 0 ? 1 : -1; }
+    var st = 200 * DT, hdx = m.homeX - m.x, hd = Math.abs(hdx) < 1 ? m.dir : (hdx > 0 ? 1 : -1);
+    if (m.y <= m.homeY + 0.001) { hawkEndReturn(m); return; }
+    // 先試往正上方; 被擋 → 往出生點的水平方向(已在正下方就往盤旋前進方向); 再被擋 → 另一側; 三個方向都被擋 → 就地轉回盤旋
+    ny = Math.max(m.homeY, m.y - st);
+    if (!boxHit(m.x, ny, m.w, m.h)) { m.y = ny; m.ang = -Math.PI / 2; }
+    else if (!boxHit(m.x + hd * st, m.y, m.w, m.h)) { m.x += hd * st; m.ang = hd > 0 ? 0 : Math.PI; }
+    else if (!boxHit(m.x - hd * st, m.y, m.w, m.h)) { m.x -= hd * st; m.ang = hd > 0 ? Math.PI : 0; }
+    else { hawkEndReturn(m); return; }
+    if (m.y <= m.homeY + 0.001) hawkEndReturn(m);
   }
 }
 // 落石蜥沿天花板爬: 前緣上方要有天花板, 且前緣身體那格不能是牆(天花板有凹槽時會穿牆)
@@ -1108,7 +1137,7 @@ function stepLizard(m) {
     var nx = m.x + 40 * m.dir * DT;
     if (lizardCanGo(m, nx, m.dir)) m.x = nx; else m.dir *= -1;
     m.facing = m.dir;
-    if (m.cd <= 0 && Math.abs(dx) <= 200 && p.y > m.y) { setSt(m, 'windup', 0.5); m.colX = m.x + Math.max(-40, Math.min(40, dx)); snd('windup'); }
+    if (!hid() && m.cd <= 0 && Math.abs(dx) <= 200 && p.y > m.y) { setSt(m, 'windup', 0.5); m.colX = m.x + Math.max(-40, Math.min(40, dx)); snd('windup'); }
   } else if (m.state === 'windup') {
     var mv = Math.max(-80 * DT, Math.min(80 * DT, m.colX - m.x));
     if (mv !== 0 && lizardCanGo(m, m.x + mv, mv > 0 ? 1 : -1)) m.x += mv;
@@ -1121,7 +1150,7 @@ function stepLizard(m) {
 function stepBat(m) {
   var g = m.grp, p = R.p;
   var ang = g.ang + m.idx * 2.0944, tx = g.cx + 50 * Math.cos(ang), ty = g.cy + 50 * Math.sin(ang);
-  m.facing = p.x >= m.x ? 1 : -1;
+  if (!hid()) m.facing = p.x >= m.x ? 1 : -1;
   if (m.ret) {
     var ddx = tx - m.x, ddy = ty - m.y, d = Math.hypot(ddx, ddy), st = 200 * DT;
     if (d <= st + 4) { m.ret = false; m.x = tx; m.y = ty; } else { m.x += ddx / d * st; m.y += ddy / d * st; }
@@ -1134,7 +1163,7 @@ function stepGroups() {
     var alive = R.mons.some(function (m) { return m.grp === g && m.alive; });
     if (!alive) return;
     var tx = g.sx, ty = g.sy;
-    if (Math.hypot(p.x - g.cx, p.y - g.cy) <= 360) { tx = p.x; ty = p.y; }
+    if (!hid() && Math.hypot(p.x - g.cx, p.y - g.cy) <= 360) { tx = p.x; ty = p.y; }
     var ddx = tx - g.cx, ddy = ty - g.cy, d = Math.hypot(ddx, ddy), st = 50 * DT;
     if (d > st) { g.cx += ddx / d * st; g.cy += ddy / d * st; }
   });
@@ -1147,7 +1176,7 @@ function stepMother(m) {
     if (m.state === 'walk') {
       h = moveX(m, 50 * m.facing * DT);
       if (h || bound() || (m.onGround && !groundAhead(m, m.facing))) m.facing *= -1;
-      if (Math.abs(dy) <= 80 && dx * m.facing > 0 && Math.abs(dx) <= 320) {
+      if (!hid() && Math.abs(dy) <= 80 && dx * m.facing > 0 && Math.abs(dx) <= 320) {
         setSt(m, 'windup', 0.8); snd('windup');
         m.lane = laneDist(m, m.facing, Math.max(0, m.facing > 0 ? hi - m.x : m.x - lo));
       }
@@ -1157,16 +1186,18 @@ function stepMother(m) {
       var ended = chargeStep(m, 380);
       m.x = Math.max(lo, Math.min(hi, m.x));
       if (ended) setSt(m, 'stun', 1.5);
-    } else { m.t -= DT; if (m.t <= 0) { setSt(m, 'walk', 0); m.facing = dx >= 0 ? 1 : -1; if (m.x <= lo) m.facing = 1; if (m.x >= hi) m.facing = -1; } }
+    } else { m.t -= DT; if (m.t <= 0) { setSt(m, 'walk', 0); if (!hid()) m.facing = dx >= 0 ? 1 : -1; if (m.x <= lo) m.facing = 1; if (m.x >= hi) m.facing = -1; } }
   } else if (m.mk === 'cliff') {
     if (m.state === 'walk') {
       h = moveX(m, 40 * m.facing * DT);
       if (h || bound() || (m.onGround && !groundAhead(m, m.facing))) m.facing *= -1;
-      if (Math.hypot(dx, dy) <= 360) { m.cd -= DT; if (m.cd <= 0) { setSt(m, 'windup', 0.7); m.facing = dx >= 0 ? 1 : -1; snd('windup'); } }
+      if (!hid() && Math.hypot(dx, dy) <= 360) { m.cd -= DT; if (m.cd <= 0) { setSt(m, 'windup', 0.7); m.facing = dx >= 0 ? 1 : -1; m.spitDir = m.facing; snd('windup'); } }
     } else if (m.state === 'windup') {
+      // 噴出方向跟著玩家所在側; 潛行開始那一刻起凍結
+      if (!hid()) m.spitDir = dx >= 0 ? 1 : -1;
       m.t -= DT;
       if (m.t <= 0) {
-        var dir = dx >= 0 ? 1 : -1;
+        var dir = m.spitDir;
         [30, 50, 70].forEach(function (a) {
           var r = a * Math.PI / 180;
           R.rocks.push({ x: m.x, y: m.y - 10, vx: Math.cos(r) * 300 * dir, vy: -Math.sin(r) * 300, t: 0, kind: 'spit', g: SPIT_G });
@@ -1179,11 +1210,11 @@ function stepMother(m) {
     if (m.state === 'walk') {
       h = moveX(m, 50 * m.facing * DT);
       if (h || bound() || (m.onGround && !groundAhead(m, m.facing))) m.facing *= -1;
-      if (Math.hypot(dx, dy) <= 400) { m.cd -= DT; if (m.cd <= 0) { setSt(m, 'burrow', 0.6); m.crackX = Math.max(lo, Math.min(hi, p.x)); snd('windup'); } }
+      if (!hid() && Math.hypot(dx, dy) <= 400) { m.cd -= DT; if (m.cd <= 0) { setSt(m, 'burrow', 0.6); m.crackX = Math.max(lo, Math.min(hi, p.x)); snd('windup'); } }
     } else if (m.state === 'burrow') { m.t -= DT; if (m.t <= 0) { setSt(m, 'under', 0.8); m.x = m.crackX; } }
     else if (m.state === 'under') { m.t -= DT; if (m.t <= 0) { setSt(m, 'erupt', 0.2); m.x = m.crackX; } }
     else if (m.state === 'erupt') { m.t -= DT; if (m.t <= 0) setSt(m, 'stuck', 1.5); }
-    else { m.t -= DT; if (m.t <= 0) { setSt(m, 'walk', 0); m.cd = 4.0; m.facing = dx >= 0 ? 1 : -1; } }
+    else { m.t -= DT; if (m.t <= 0) { setSt(m, 'walk', 0); m.cd = 4.0; if (!hid()) m.facing = dx >= 0 ? 1 : -1; } }
   }
 }
 var SPIT_G = 300;
@@ -1260,8 +1291,9 @@ function stepBoss() {
   function lerpTo(key, a, b, uu) { return a + (b - a) * clack(uu); }
   switch (B.state) {
     case 'idle':
-      B.t -= DT;
-      if (B.t <= 0) {
+      B.t = Math.max(0, B.t - DT);
+      // 待機倒數到 0 時若獵人還在潛行就停在待機、不出招(規則 35b)
+      if (B.t <= 0 && !hid()) {
         var mv;
         if (B.phase === 1) mv = 'slam'; else if (B.phase === 2) mv = B.seq % 2 === 0 ? 'beam' : 'slam'; else mv = B.seq % 2 === 0 ? 'rocks' : 'beam';
         B.seq++;
@@ -1275,7 +1307,8 @@ function stepBoss() {
       B.t -= DT; B.acc += DT;
       if (B.acc >= 0.1) {
         B.acc = 0;
-        if (B.stT < 0.8) F.x += Math.max(-110, Math.min(110, Math.max(70, Math.min(1210, p.x)) - F.x));
+        if (hid()) { /* 潛行: 拳停住不再跟 */ }
+        else if (B.stT < 0.8) F.x += Math.max(-110, Math.min(110, Math.max(70, Math.min(1210, p.x)) - F.x));
         F.y += Math.max(-60, Math.min(60, Math.max(70, p.y - 200) - F.y));
       }
       B.landY = bossTop(F.x);
@@ -1475,15 +1508,15 @@ function buildTele() {
     if (m.type === 'boar' && m.state === 'windup') tl.push({ kind: 'lane', x: m.x + m.facing * 24, y: gy, x2: m.x + m.facing * (24 + m.lane), p: 1 - m.t / 0.5 });
     else if (m.type === 'ram' && m.state === 'windup') tl.push({ kind: 'lane', x: m.x + m.facing * 22, y: gy, x2: m.x + m.facing * (22 + m.lane), p: 1 - m.t / 0.6 });
     else if (m.type === 'frog' && m.state === 'crouch' && m.t <= 0.3 && m.onGround) { var pl = frogPlan(m); tl.push({ kind: 'ring', x: pl.lx, y: pl.ly, w: 40, p: 1 - m.t / 0.3 }); }
-    else if (m.type === 'bee' && m.state === 'aim') { var ae = rayTrunc(m.x, m.y, p.x, p.y); tl.push({ kind: 'aim', x: m.x, y: m.y, x2: ae.x, y2: ae.y, p: 1 - m.t / 0.4 }); }
+    else if (m.type === 'bee' && m.state === 'aim') { var ae = rayTrunc(m.x, m.y, m.aimX, m.aimY); tl.push({ kind: 'aim', x: m.x, y: m.y, x2: ae.x, y2: ae.y, p: 1 - m.t / 0.4 }); }
     else if (m.type === 'thorn' && m.state === 'windup') tl.push({ kind: 'sweep', x: m.facing > 0 ? m.x + 20 : m.x - 20 - m.sw, y: gy - 40, w: m.sw, h: 40, p: 1 - m.t / 0.6 });
-    else if (m.type === 'hawk' && m.state === 'hover') { var de = rayTrunc(m.x, m.y, m.lockX, m.lockY); tl.push({ kind: 'dive', x: m.x, y: m.y, x2: de.x, y2: de.y, p: 1 - m.t / 0.7 }); }
+    else if (m.type === 'hawk' && m.state === 'hover') { var de = hawkSweep(m.x, m.y, m.lockX, m.lockY, 1e9); tl.push({ kind: 'dive', x: m.x, y: m.y, x2: de.x, y2: de.y, p: 1 - m.t / 0.7 }); }
     else if (m.type === 'lizard' && m.state === 'windup') tl.push({ kind: 'column', x: m.colX, y: m.y + 12, y2: groundTopFrom(m.colX, m.y + 12), w: 32, p: 1 - m.t / 0.5 });
     else if (m.type === 'beetle' && m.state === 'fuse') tl.push({ kind: 'blast', x: m.x, y: m.y, r: 70, p: 1 - m.t / 0.8 });
     else if (m.type === 'mother') {
       if (m.mk === 'forest' && m.state === 'windup') tl.push({ kind: 'lane', x: m.x + m.facing * 32, y: gy, x2: m.x + m.facing * (32 + m.lane), p: 1 - m.t / 0.8 });
       else if (m.mk === 'cliff' && m.state === 'windup') {
-        var dir = p.x >= m.x ? 1 : -1;
+        var dir = m.spitDir || (p.x >= m.x ? 1 : -1);
         [30, 50, 70].forEach(function (a) {
           var r = a * Math.PI / 180, vx = Math.cos(r) * 300 * dir, vy = -Math.sin(r) * 300, all = [], pts = [], q, hit = false;
           // 每 0.03 秒取一點, 碰到第一個實心格(或出畫面)就截斷, 再均勻抽到 3~12 點
@@ -1520,7 +1553,7 @@ function bossSnap() {
 function snap() {
   var p = R.p;
   var S = {
-    p: { x: p.x, y: p.y, cls: R.cls, facing: p.facing, pose: p.pose, poseT: p.poseT, inv: p.inv > 0, stealth: p.stealth, stealthT: p.stealthT, unT: p.unT },
+    p: { x: p.x, y: p.y, cls: R.cls, facing: p.facing, pose: p.pose, poseT: p.poseT, sw: p.pose === 'slash' ? p.swingIdx : 0, inv: p.inv > 0, stealth: p.stealth, stealthT: p.stealthT, unT: p.unT },
     m: [], tl: buildTele(),
     a: R.arrows.map(function (a) { return [a.x, a.y, a.ang]; }),
     // 第 4 項 = 玩家判定框此刻在爆炸圈內(沒被牆擋住): 炸彈現在炸開會打到自己
@@ -1536,7 +1569,7 @@ function snap() {
   R.mons.forEach(function (m) {
     if (!m.alive) return;
     S.m.push({ k: m.type, mk: m.mk, x: m.x, y: m.y, w: m.w, h: m.h, f: m.facing, st: monArt(m), hit: m.hitT > 0, brood: m.brood, t: m.anim, hp: m.hp, mhp: m.maxHp,
-      sh: m.sh, msh: m.maxSh, chip: m.chip, chipT: m.chipT, fd: m.fl ? m.fl.dir : 0, ang: m.ang, fuse: m.state === 'fuse' ? Math.max(0, 0.8 - m.t) : 0.8,
+      sh: m.sh, msh: m.maxSh, chip: m.chip, chipT: m.chipT, fd: m.fl ? m.fl.dir : 0, ang: (m.state === 'dive' || m.state === 'return') ? m.ang : 0, fuse: m.state === 'fuse' ? Math.max(0, 0.8 - m.t) : 0.8,
       hs: m.hasShield, brk: m.breakT, stT: m.stT, stD: m.stD, weak: isWeak(m) });
   });
   return S;
@@ -2139,7 +2172,7 @@ function drawScene(c, o) {
     var B = S.boss;
     Art.drawBossHpBar(c, { x: B.hx, y: B.hy - 80 - 20 - 44 * B.split, hp: B.hp, maxHp: B.maxHp, marks: [30, 15], chip: B.chip, chipT: B.chipT, chipDur: 0.4, weak: !!B.weak });
   }
-  if (S.p && !o.noPlayer) Art.drawPlayer(c, { x: S.p.x, y: S.p.y, cls: S.p.cls, facing: S.p.facing, pose: o.cheering ? 'cheer' : S.p.pose, poseT: o.cheering ? Math.max(0, o.cheerT) : S.p.poseT, invuln: S.p.inv, stealth: S.p.stealth,
+  if (S.p && !o.noPlayer) Art.drawPlayer(c, { x: S.p.x, y: S.p.y, cls: S.p.cls, facing: S.p.facing, pose: o.cheering ? 'cheer' : S.p.pose, poseT: o.cheering ? Math.max(0, o.cheerT) : S.p.poseT, swingIdx: (!o.cheering && S.p.pose === 'slash') ? (S.p.sw || 0) : 0, invuln: S.p.inv, stealth: S.p.stealth,
     stealthT: S.p.stealthT, stealthDur: 2.5, unstealthT: S.p.unT, unstealthDur: 0.3 });
   S.a.forEach(function (a) { Art.drawArrow(c, { x: a[0], y: a[1], angle: a[2] }); });
   S.b.forEach(function (b) {
@@ -2240,7 +2273,47 @@ function hudState(mode) {
   if (mode === 'level' && R) { s.time = r1(R.f / 60); s.hp = Math.max(0, R.p.hp); s.maxHp = maxHp(); }
   return s;
 }
-function drawSoundIcon(c) { if (!isTouch()) Art.drawSoundIcon(c, { x: 1250, y: 62, on: !G.muted }); }
+// 關卡內聲音開關圖示: 角落依關卡決定(右上 → 左上 → 左下 → 右下, 取第一個不蓋到素材、寶箱、終點旗、工程牌、怪物出生格的角; 目前 levels.js 只有第 4 關走左上)
+var SND_CORNERS = [[1250, 62], [30, 62], [30, 690], [1250, 690]];
+function soundCorner(L) {
+  var i, k;
+  for (i = 0; i < SND_CORNERS.length; i++) {
+    var cx = SND_CORNERS[i][0], cy = SND_CORNERS[i][1], blocked = false;
+    var hit = function (x, y, w, h) { return ovl(cx, cy, 36, 36, x, y, w, h); };
+    L.picks.forEach(function (d) { if (hit(d.x, d.y, 24, 24)) blocked = true; });
+    if (L.chest && hit(L.chest.x, L.chest.y, 40, 36)) blocked = true;
+    if (!L.goal.hidden && hit(L.goal.x, L.goal.y, 40, 80)) blocked = true;
+    L.sites.forEach(function (st) { if (hit(st.sign[0] * TS + 20, st.sign[1] * TS - 24, 36, 48)) blocked = true; });
+    L.mons.forEach(function (d) { var D = d.type === 'bats' ? MDEF.bat : MDEF[d.type]; if (hit(d.x, d.y, D.w, D.h)) blocked = true; });
+    if (!blocked) return { x: cx, y: cy };
+  }
+  return { x: SND_CORNERS[0][0], y: SND_CORNERS[0][1] };
+}
+// 矩形是否碰到玩家、活著的怪物、地上還沒撿的素材、飛行物(教學橫幅與聲音圖示變淡用, 框外擴 4px 判定)
+function liveOverlap(x, y, w, h) {
+  var p = R.p, hitAny = false;
+  w += 8; h += 8;
+  if (ovl(x, y, w, h, p.x, p.y, p.w, p.h)) return true;
+  R.mons.forEach(function (m) { if (m.alive && ovl(x, y, w, h, m.x, m.y, m.w, m.h)) hitAny = true; });
+  R.L.picks.forEach(function (d) { if (R.taken[d.id] === undefined && zOk(d.z, R.rep) && ovl(x, y, w, h, d.x, d.y, 24, 24)) hitAny = true; });
+  R.arrows.forEach(function (a) { if (ovl(x, y, w, h, a.x, a.y, 12, 12)) hitAny = true; });
+  R.bombs.forEach(function (a) { if (ovl(x, y, w, h, a.x, a.y, 12, 12)) hitAny = true; });
+  R.shots.forEach(function (a) { if (ovl(x, y, w, h, a.x, a.y, 12, 12)) hitAny = true; });
+  R.rocks.forEach(function (a) { if (ovl(x, y, w, h, a.x, a.y, 20, 20)) hitAny = true; });
+  return hitAny;
+}
+function fadeToward(v, target, dt) { return v < target ? Math.min(target, v + 6 * dt) : Math.max(target, v - 6 * dt); }
+function fadeStep(dt) {
+  if (G.screen === 'play' && R) {
+    G.fTut = fadeToward(G.fTut, liveOverlap(640, 70, 600, 48) ? 0.3 : 1, dt);
+    G.fSnd = fadeToward(G.fSnd, liveOverlap(R.snd.x, R.snd.y, 36, 36) ? 0.3 : 1, dt);
+  } else { G.fTut = 1; G.fSnd = 1; }
+}
+function drawSoundIcon(c) {
+  if (isTouch()) return;
+  var inLv = !!R && (G.screen === 'play' || G.screen === 'result' || G.screen === 'fail');
+  Art.drawSoundIcon(c, { x: inLv ? R.snd.x : 1250, y: inLv ? R.snd.y : 62, on: !G.muted, alpha: inLv ? G.fSnd : 1 });
+}
 // 關卡畫面(世界部分, 不含資訊列): mode 'run' 一般 | 'clear' 過關動畫(以焦點放大) | 'dead' 死亡動畫(不畫玩家)
 function liveScene(c, mode) {
   var S = R.lastSnap || R.frames[R.frames.length - 1];
@@ -2449,6 +2522,7 @@ function update(dt) {
   advanceReplays(dt);
   updateFlights(dt);
   tutStep(dt);
+  fadeStep(dt);
   if (G.unlockFx) { G.unlockFx.t += dt; if (G.unlockFx.t >= 1.3) G.unlockFx = null; }
   if (G.screen === 'play' && R && R.state === 'clear') {
     R.cT += dt;

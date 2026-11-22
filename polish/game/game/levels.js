@@ -40,8 +40,8 @@ window.LEVEL_DEFS = [
     ],
     sites: [
       { kind: 'rubble', role: 'treasure', cells: [[27, 13], [27, 14]], sign: [26, 15], fog: [[28, 11, 3, 4]] },
-      { kind: 'stairs', role: 'shortcut', cells: [[17, 10], [18, 10], [18, 9], [19, 10], [19, 9], [20, 10], [20, 9], [21, 9], [22, 9], [23, 9], [24, 9], [16, 10], [17, 9], [20, 8], [21, 8], [22, 8], [23, 8], [24, 8]], sign: [13, 12], fog: [[1, 13, 4, 2]] },
-      { kind: 'bridge', role: 'treasure', cells: [[4, 15], [5, 15], [6, 15], [7, 15], [8, 15], [9, 15], [10, 15], [11, 15]], sign: [12, 15], fog: [] }
+      { kind: 'stairs', role: 'treasure', cells: [[17, 10], [18, 10], [18, 9], [19, 10], [19, 9], [20, 10], [20, 9], [21, 9], [22, 9], [23, 9], [24, 9], [16, 10], [17, 9], [20, 8], [21, 8], [22, 8], [23, 8], [24, 8], [25, 8], [26, 8], [26, 9], [25, 9]], sign: [13, 12], fog: [[27, 5, 5, 3]] },
+      { kind: 'bridge', role: 'treasure', cells: [[4, 15], [5, 15], [6, 15], [7, 15], [8, 15], [9, 15], [10, 15], [11, 15]], sign: [12, 15], fog: [[1, 13, 4, 2]] }
     ],
     start: [2, 12], goal: [21, 15],
     spikes: [], cracks: [],
@@ -91,7 +91,7 @@ window.LEVEL_DEFS = [
     sites: [
       { kind: 'rubble', role: 'shortcut', cells: [[5, 14], [25, 15]], sign: [4, 15], fog: [[6, 14, 7, 1], [12, 15, 13, 1]] },
       { kind: 'rubble', role: 'shortcut', cells: [[11, 8], [18, 8]], sign: [10, 9], fog: [[12, 8, 6, 1], [14, 7, 2, 1]] },
-      { kind: 'bridge', role: 'treasure', cells: [[19, 5], [20, 5], [21, 5], [22, 5], [23, 5], [24, 5], [25, 5], [26, 5], [27, 5]], sign: [16, 6], fog: [[28, 2, 4, 9]] }
+      { kind: 'bridge', role: 'treasure', cells: [[19, 5], [20, 5], [21, 5], [22, 5], [23, 5], [24, 5], [25, 5], [26, 5], [27, 5]], sign: [16, 6], fog: [[28, 2, 4, 5]] }
     ],
     start: [1, 15], goal: [30, 17],
     spikes: [[23, 12]], cracks: [[6, 12], [6, 11], [8, 10], [8, 9], [12, 6], [12, 5]],
@@ -101,14 +101,14 @@ window.LEVEL_DEFS = [
       ['crystal', 14, 7],
       ['crystal', 15, 7],
       ['stone', 8, 14],
-      ['stone', 31, 7],
-      ['stone', 31, 9],
-      ['stone', 31, 8],
       ['wood', 31, 5],
       ['wood', 31, 6],
       ['wood', 6, 10],
       ['wood', 12, 4],
-      ['stone', 21, 15]
+      ['stone', 21, 15],
+      ['stone', 31, 4],
+      ['stone', 31, 3],
+      ['stone', 31, 2]
     ],
     mons: [
       ['thorn', 9, 10],
@@ -209,12 +209,12 @@ window.LEVEL_DEFS = [
       ['stone', 31, 3],
       ['stone', 31, 2],
       ['stone', 31, 4],
-      ['stone', 27, 1],
-      ['stone', 28, 1],
       ['wood', 12, 10],
       ['stone', 22, 12],
       ['stone', 6, 15],
-      ['wood', 7, 15]
+      ['wood', 7, 15],
+      ['stone', 30, 1],
+      ['stone', 31, 1]
     ],
     mons: [
       ['ram', 7, 13],
@@ -252,7 +252,7 @@ window.LEVEL_DEFS = [
     sites: [
       { kind: 'bridge', role: 'treasure', cells: [[8, 4], [9, 4], [11, 4], [10, 4], [12, 4], [15, 4], [16, 4], [17, 4], [18, 4], [19, 4]], sign: [7, 4], fog: [[20, 1, 10, 3]] },
       { kind: 'stairs', role: 'shortcut', cells: [[9, 15], [10, 15], [10, 14], [11, 15], [15, 15], [16, 15], [6, 12], [7, 12], [8, 12], [6, 11], [6, 10], [8, 8], [8, 9]], sign: [9, 8], fog: [] },
-      { kind: 'nestgate', role: 'nest', cells: [], sign: [18, 15], fog: [[21, 11, 11, 5], [23, 9, 9, 2]], gate: [19, 14], lair: [21, 9, 11, 7] }
+      { kind: 'nestgate', role: 'nest', cells: [], sign: [18, 16], fog: [[21, 11, 11, 5], [23, 9, 9, 2]], gate: [19, 14], lair: [21, 9, 11, 7] }
     ],
     start: [2, 4], goal: [13, 16],
     spikes: [[11, 7], [5, 11], [22, 3]], cracks: [],
@@ -309,8 +309,8 @@ window.LEVEL_DEFS = [
     ],
     sites: [
       { kind: 'rubble', role: 'treasure', cells: [[25, 2], [25, 1], [25, 0]], sign: [23, 3], fog: [[26, 0, 6, 3]] },
-      { kind: 'rubble', role: 'shortcut', cells: [[4, 16], [4, 15], [4, 14], [5, 14], [6, 14], [7, 14], [8, 14], [9, 14], [9, 15], [9, 16]], sign: [10, 15], fog: [[5, 15, 4, 2]] },
-      { kind: 'stairs', role: 'shortcut', cells: [[24, 14], [25, 12], [24, 10]], sign: [25, 16], fog: [] }
+      { kind: 'rubble', role: 'treasure', cells: [[4, 16], [4, 15], [4, 14], [5, 14], [6, 14], [7, 14], [8, 14], [9, 14], [9, 15], [9, 16]], sign: [10, 15], fog: [[5, 15, 4, 2]] },
+      { kind: 'stairs', role: 'shortcut', cells: [[25, 13], [24, 11]], sign: [25, 16], fog: [] }
     ],
     start: [1, 5], goal: [28, 15],
     spikes: [], cracks: [],
@@ -328,7 +328,6 @@ window.LEVEL_DEFS = [
       ['stone', 17, 13],
       ['stone', 30, 16],
       ['stone', 29, 16],
-      ['crystal', 24, 11],
       ['crystal', 24, 12],
       ['crystal', 24, 13],
       ['stone', 22, 9],
@@ -339,7 +338,8 @@ window.LEVEL_DEFS = [
       ['wood', 6, 15],
       ['wood', 6, 16],
       ['wood', 5, 15],
-      ['wood', 5, 16]
+      ['wood', 5, 16],
+      ['crystal', 24, 14]
     ],
     mons: [
       ['shield', 6, 5],
@@ -377,7 +377,7 @@ window.LEVEL_DEFS = [
     sites: [
       { kind: 'stairs', role: 'shortcut', cells: [[23, 4], [24, 4], [24, 3], [25, 3], [25, 2], [25, 4]], sign: [21, 6], fog: [] },
       { kind: 'rubble', role: 'treasure', cells: [[21, 7], [21, 8]], sign: [22, 9], fog: [[16, 7, 5, 3]] },
-      { kind: 'nestgate', role: 'nest', cells: [], sign: [10, 12], fog: [], gate: [8, 13], lair: [1, 10, 9, 5] }
+      { kind: 'nestgate', role: 'nest', cells: [], sign: [10, 15], fog: [[1, 10, 7, 5]], gate: [8, 13], lair: [1, 10, 9, 5] }
     ],
     start: [1, 4], goal: [27, 4],
     spikes: [[12, 11], [17, 5]], cracks: [[8, 6], [8, 7], [15, 11], [15, 12]],

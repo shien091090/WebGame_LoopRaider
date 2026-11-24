@@ -72,7 +72,17 @@
 | `player_death` | player_death | (第 2 輪新增) 死亡動畫開始(血量歸 0 或掉出畫面, 世界暗下)。這一下**不呼叫** `player_hurt` | — | sfx_player_death.mp3(0.65 秒: 重擊 + 降八度的「咚」+ 低鐘餘響, 比受傷沉、持續到碎裂前) | −12 |
 | `shatter` | shatter | (第 2 輪新增) 死亡動畫第 0.7 秒, 角色碎成碎片那一刻 | — | sfx_shatter.mp3(0.5 秒: 玻璃重碎 + 4 片越來越小、越來越高的碎片散落) | −14 |
 | `level_fail` | level_fail | 失敗面板出現(死亡動畫播完, 約 1.3 秒) | — | sfx_level_fail.mp3(同組旋律下降) | −14 |
-| `tutorial_done` | tutorial_done | 教學階段完成特效 | — | sfx_tutorial_done.mp3 | −17 |
+| `tutorial_done` | tutorial_done | (第 5 輪改時機) **只在**總結板按 `Z` 關閉、新手教學結束那一刻播一次(不疊 `ui_back`) | — | sfx_tutorial_done.mp3(**第 5 輪重做** 0.95 秒: 薩克斯「小號角」完整上揚句 + 同旋律撥弦墊起音; 跟 `level_clear` 同一段旋律、換樂器) | −14 |
+| `tut_pop` | tut_pop | (第 5 輪新增) 教學泡泡 + 大箭頭彈出那一刻; 換句時只在**新泡泡彈出**時播(舊泡泡收起不播); 第一關擋終點提示出現時也播(與 `ui_deny` 疊著播)。演出 2 的卷軸、演出 6 的聚光燈不播這個(各有專屬音) | — | sfx_tut_pop.mp3(0.23 秒: 「啵」+ 短上揚, 0.15 秒到頂) | −17 |
+| `tut_type` | tut_type | (第 5 輪新增) 逐字顯示時**每個字出現一次**(含句中按鍵外觀; 空白可不呼叫)。sound.js 內建同名 0.07 秒限頻, RD 不必自己擋 | — | sfx_tut_type.mp3(0.02 秒極短的「嗒」, 每次音高隨機 ±10%) | **−30**(全遊戲最輕) |
+| `tut_next` | tut_next | (第 5 輪新增) 「按 Z 繼續」徽章出現後按下 `Z`(地圖 3 → 4、地圖 4 → 總結板)。字還沒打完時按 `Z` 不反應, 也不播 | — | sfx_tut_next.mp3(0.24 秒: 書本放下的「嗒」+ 翻頁) | −19 |
+| `tut_panel` | tut_panel | (第 5 輪新增) 演出 2: 操作方式卷軸從角色胸口冒出、開始攤開那一刻 | — | sfx_tut_panel.mp3(0.85 秒: 翻開 + 羊皮紙沙沙展開, 0.58 秒最響) | −20 |
+| `tut_dock` | tut_dock | (第 5 輪新增) 操作方式面板滑到左上角**落定**那一刻(落定輕彈開始時) | — | sfx_tut_dock.mp3(0.2 秒: 闔書「扣」+ 輕喀) | −20 |
+| `tut_spot` | tut_spot | (第 5 輪新增) 演出 6: 聚光燈開始淡入那一刻(此時泡泡還沒彈出; 0.6 秒後泡泡彈出時照常播 `tut_pop`) | — | sfx_tut_spot.mp3(0.59 秒: 舞台燈開關「喀」+ 悶「咚」+ 燈亮的低嗡餘韻) | −15 |
+| `respawn` | respawn | (第 5 輪新增) 第一關教學死亡後重生**開始**(碎片從上方盤旋飛回; 死亡後 1.7 秒) | — | sfx_respawn.mp3(1.38 秒: 碎裂聲**倒放**的碎片聚回 + 越轉越快的棘輪倒帶 + 上揚掃音, 一路漸強到 1.38 秒收住; 開頭有亮音立即出聲) | −14 |
+| `respawn_land` | respawn_land | (第 5 輪新增) 重生角色落到起點那一刻(`respawn` 之後約 1.41 秒) | — | sfx_respawn_land.mp3(0.2 秒: 輕落地 + 小亮音「好了」) | −18 |
+| `summary_open` | summary_open | (第 5 輪新增) 總結板**開始**從上方滑下那一刻(板子 0.5 秒落定; 聲音裡的「咚」落在呼叫後 0.45 秒) | — | sfx_summary_open.mp3(0.78 秒: 木板滑下的摩擦聲 → 0.45 秒大木板落定) | −15 |
+| `summary_card` | summary_card | (第 5 輪新增) 每張卡**開始**從右側滑入時各呼叫一次(0.7 / 1.15 / 1.6 / 2.05 秒, 共 4 次; 「叩」落定在呼叫後 0.3 秒) | — | sfx_summary_card.mp3(0.6 秒: 滑牌 + 木頭輕敲落定)。sound.js 自動讓**連續的卡一張比一張高 2 個半音**(間隔 < 0.8 秒算同一串, 第 4 張 +6 半音), RD 不用傳參數 | −19 |
 | `boss_slam` | boss_slam | 巨拳砸地(砸到的那一刻) | — | sfx_boss_slam.mp3 | −10 |
 | `boss_beam_charge` | boss_beam_charge | 大眼聚光預備開始 | — | sfx_boss_beam_charge.mp3(1.2 秒漸強, 尾端接光束) | −15 |
 | `boss_beam` | boss_beam | 光束開始掃射 | — | sfx_boss_beam.mp3(1 秒) | −13 |
@@ -126,16 +136,26 @@
 | `shield_break` | `hit_block` |
 | `level_fail` | `player_hurt` |
 | `player_death` | `player_hurt` |
+| `tutorial_done` | `ui_back` |
 
 - 死亡: `player_death`(0 秒)→ `shatter`(0.7 秒)→ `level_fail`(1.3 秒), 三者依時間各播一次, 由 RD 照死亡動畫的時間呼叫; `player_death` 的餘響在 0.65 秒收掉, 不會和碎裂聲疊糊
-- 過關: `level_clear`(按 `↓`)→ `iris_close`(1.15 秒); 第一次過關時 `tutorial_done` 跟 `level_clear` 疊著播
-- 解鎖職業: 只播 `unlock_class`(教學階段 11 的 `tutorial_done` 疊著播)
+- 過關: `level_clear`(按 `↓`)→ `iris_close`(1.15 秒)。(第 5 輪起 `tutorial_done` 不再跟過關疊播)
+- 解鎖職業: 只播 `unlock_class`
+- **新手教學(第 5 輪)**, 依時間各播一次:
+  - 地圖 1 / 準備 1 按 `Z` 完成: 只播該畫面原本的 `ui_confirm`, 不另播教學音; 泡泡出現時照常 `tut_pop`、打字 `tut_type`
+  - 第一關演出: 演出 1 `tut_pop` → 打字 `tut_type`… → 演出 2 `tut_panel`(卷軸冒出)→ 示範時照播 `jump`、`slash` ×2、`dash` → `tut_dock`(落定)→ 演出 3~5 各 `tut_pop` + 打字 → 演出 6 `tut_spot`(聚光燈淡入)→ 0.6 秒後 `tut_pop` + 打字
+  - `tut_type` 與 `tut_pop` 不會同時(彈出 0.32 秒後才打字); 地圖 2a 往後接句時不再播 `tut_pop`, 只播接上的字的 `tut_type`
+  - 地圖 3 / 4 按 `Z`: `tut_next`, 接著新泡泡彈出時 `tut_pop`
+  - 總結板: `summary_open`(滑下開始)→ `summary_card` ×4(每張滑入開始, 自動逐張升高)→ 按 `Z` 關閉只播 `tutorial_done`
+  - 第一關擋終點: `ui_deny` 與 `tut_pop` 疊著播
+  - 教學死亡: `player_death`(0 秒)→ `shatter`(0.7 秒)→ **不播** `level_fail` → `respawn`(1.7 秒)→ `respawn_land`(約 3.11 秒)。`respawn` 是 `shatter` 倒放做的, 聽得出「碎掉的又倒帶回來」
+  - 音量: 教學音都比遊戲回饋輕(`tut_type` −30 最輕, 打字一整句也不吵; 卷軸 / 收好 −20、翻頁 −19、彈出 −17), 只有聚光燈 `tut_spot` −15 與總結板落定 −15 稍重, 是規格要的「注意這裡」與「收尾」
 - 疊著播的: `monster_down` + `chain`; `chest_open` + `item_get`(後者晚 0.15 秒, 由 RD 延遲呼叫); `repair` 後 0.6 秒 `fog_clear`
 - 甲蟲被擊飛撞爆只播 `explosion`(由 RD 不呼叫 `monster_down`)
 - 炸彈炸到自己: `explosion` 與 `player_hurt` 同一刻都播, 不互相讓位(爆炸 −11 的低頻轟 + 受傷 −13 的中頻「咚」, 頻段不同, 聽得出「炸到自己了」)
 - 劍士連按揮砍: `slash` 每按一次一聲(每秒 8~10 次時間隔 0.1~0.125 秒, 刀聲主體 0.11 秒, 不糊); 兩下間隔小於 0.05 秒的只出第一聲; 新一刀出聲時前一刀在 15 毫秒內淡出(不是硬切, 沒有喀聲), 同一時間最多一刀在響, 峰值不會疊加爆音
-- 限頻(同名事件最短間隔, RD 有做也無害): `slash` 0.05 秒、`hit` 0.05 秒、`coin_land` 0.06 秒、`drop_collect` 0.08 秒、`hit_block` 0.05 秒、`ui_move` 0.03 秒、`arrow` 0.05 秒、`rock_drop` 0.05 秒、`boss_rock` 0.08 秒、`pickup` 0.03 秒
-- 會連發的事件(`hit`、`coin_land`、`drop_collect`、`arrow`、`slash`、`pickup` 等)每次隨機微調音高 ±4~8%, 不會像機關槍
+- 限頻(同名事件最短間隔, RD 有做也無害): `tut_type` 0.07 秒、`tut_pop` 0.05 秒、`slash` 0.05 秒、`hit` 0.05 秒、`coin_land` 0.06 秒、`drop_collect` 0.08 秒、`hit_block` 0.05 秒、`ui_move` 0.03 秒、`arrow` 0.05 秒、`rock_drop` 0.05 秒、`boss_rock` 0.08 秒、`pickup` 0.03 秒
+- 會連發的事件(`hit`、`coin_land`、`drop_collect`、`arrow`、`slash`、`pickup`、`tut_type` 等)每次隨機微調音高 ±4~10%, 不會像機關槍
 - 音量層級: Boss / 巢母大事件(−9~−11)> 爆炸、受傷、死亡、過關、解鎖職業(−11~−14)> 一般戰鬥(−15~−18)> 介面與背景性的連發音(−21~−24)。玩家受傷(−13)刻意比打怪的 `hit`(−17)響, 不會被淹沒; `player_death`(−12)比 `player_hurt` 響且尾音長(受傷 0.15 秒就掉到 −26, 死亡維持 −17~−22 到 0.4 秒), 聽得出「這下是死了」; `unlock_class`(−11)比 `upgrade`(−14)響、長(1.33 對 0.5 秒有效長度), 規格要的「更隆重」
 
 ## 理念或經驗落實
@@ -160,5 +180,13 @@
 - **第 4 輪(本輪)音效不新增事件, 55 個音效與 7 首音樂原檔全部沿用**(沿用任務): 只為 `slash` 的「每按一次播一次、每秒 8~10 下」加執行時處理; 重量現有刀聲(峰值 −3 dBFS、10 毫秒包絡 0.10 秒後 −30 dB), 長度已夠短, 不換素材
 - **連發音不能被同名的前一聲切掉, 但也不能疊到爆音**(規格: 可快速連播不糊、不爆音): 一般連發音(`hit`、`arrow` 等)各自疊著播; `slash` 峰值高(−3 dBFS)、又可能 0.05 秒連兩下, 改成「新的一刀起、前一刀 15 毫秒線性淡出」, 跟限頻 0.05 秒一起寫在 sound.js
 - **冒煙測試用假 Audio / AudioContext 逐一驗**(技術): 第 4 輪加驗 `slash` 每 0.1 秒都出聲、前一聲有排淡出、0.02 秒內第二下被限頻; init 前呼叫、interface.json 的 55 個事件各一次、讓位(含本輪新增的 `player_death` 讓 `player_hurt`)、死亡三段依序、靜音、無 Web Audio 退回播放池, 全部通過
+
+- **第 5 輪(本輪)沿用 55 個既有音效與 7 首音樂原檔不動**(沿用任務): 只新增 10 個教學事件、重做 `tutorial_done`; 全部取自 Kenney CC0 包(其中 5 個是上一輪已用的包, 只多 Casino Audio 一包拿紙牌聲), 跟既有的木作 / 書本 / 撥弦家族同一套質感
+- **成對事件取同一段素材**(素材來源 / 成對事件): `respawn` 直接用 `shatter` 的五片玻璃**反轉**、時間倒排, 碎裂與重生是一對「碎掉 → 倒帶回來」; `tutorial_done` 用 Music Jingles 02 號(過關那段旋律)換成薩克斯 — 「換樂器不換旋律」, 聽得出同一家族又不會跟過關搞混
+- **蓄力用反轉素材, 尾端正好是事件點**(事件設計 / 蓄力 → 撞擊): `respawn` 的反轉低鐘與碎片都對齊 1.38 秒收尾, 剛好接在 1.41 秒的 `respawn_land` 前; 量 20 毫秒包絡確認從開頭一路爬升(約 −50 → −28 dB 再到碎片峰值), 中段沒有無聲的空洞(第一版中段掉到 −58, 加一層漸加速的棘輪聲才補上)
+- **刻意漸強的音要有立即出聲的層墊著**(技術 / 即時回饋延遲): `respawn` 開頭墊亮音、到峰值一成 0 毫秒; `summary_open` 的滑動聲跳過素材開頭 0.1 秒的輕前奏, 從 172 毫秒縮到 29 毫秒
+- **即時回饋音要在 0.03 秒內出聲**(技術 / 即時回饋延遲): 按鍵直接觸發的 `tut_next` 到峰值一成 1 毫秒; `tut_pop`、`tut_type`、`tut_dock`、`tut_spot`、`respawn_land` 都是 0 毫秒
+- **連發音加限頻 + 隨機音高**(技術 / 連發): `tut_type` 每秒 13 字, 0.07 秒限頻、±10% 音高、響度 −30, 整句打字是細碎的顆粒聲
+- **冒煙測試**(技術): 本輪加驗 65 個事件都有內嵌音檔、`tut_type` 每 0.077 秒都出聲且 0.03 秒內第二下被擋、`summary_card` 四張逐張升高(第 4 張 +6 半音)、隔 3 秒回原音高、`tutorial_done` 擋同刻的 `ui_back`、`ui_deny` + `tut_pop` 疊播、教學死亡 → 重生四聲依序、無 Web Audio 退回播放池, 全部通過
 
 輕重與辨識度都是量測數字推定的, **聽感待試玩確認**。

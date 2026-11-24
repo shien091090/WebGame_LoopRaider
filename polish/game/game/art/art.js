@@ -3,7 +3,8 @@
  * 每個函式自己 save / restore。介面: polish/game/interface.json(函式名、state 欄位一個不多一個不少)。
  * 視覺方向: visual/direction.md 選中方案(title B / hero A / ui A / materials C / monsters B / combat-fx A /
  *   replay-map B / repair-fog A / themes B / stage-panel A / skill-cd A / final-boss B / ending B / boss-stage C;
- *   polish 第 2 輪新增: death-anim B / clear-anim C / result-panel B / unlock-fx B / map-card B / devices C / map-layout B)。
+ *   polish 第 2 輪新增: death-anim B / clear-anim C / result-panel B / unlock-fx B / map-card B / devices C / map-layout B;
+ *   polish 第 5 輪新增: tut-arrow B / tut-text B / keycap B / ctrl-panel A(+ 逐組點亮)/ tut-spotlight B / respawn C / tut-summary B)。
  * 時間: 有動畫的函式優先用 state 的 t / xxT; 沒傳時間的少數待機動態(寶箱閃光、旗飄、蜂彈旋轉、無敵閃爍、框選脈動)才讀系統時鐘。
  */
 (function () {
@@ -72,7 +73,6 @@
     bagWood: '每次通關 +4 木材', bagStone: '每次通關 +3 石頭', bagCrystal: '每次通關 +2 水晶', coreLamp: '每次通關 +2 魔核',
     glove: '撿到的素材 +1', horn: '打怪掉落 ×2', heart: '打怪掉落 ×2、通關 +4 魔核', gear: '回放速度 +25%'
   };
-  var KEY_LABEL = { left: '←', right: '→', up: '↑', down: '↓', z: 'Z', x: 'X' };
 
   // ---------- 共用小工具 ----------
   function num(v, d) { v = Number(v); return (typeof v === 'number' && isFinite(v)) ? v : d; }
@@ -219,36 +219,144 @@
     circle(ctx, 0, 5.5, 2); ctx.fillStyle = '#141a22'; ctx.fill();
     ctx.restore();
   }
-  function keyW(ctx, label, px) { return Math.max(px * 1.7, tw(ctx, label, px, true) + px * 0.9); }
-  // 石鍵帽: hot = 金頂(此刻按得下去); done = 金頂 + 打勾
-  function keycap(ctx, label, cx, cy, px, hot, done) {
-    var w = keyW(ctx, label, px), h = px * 1.6;
+  // ---------- 按鍵外觀(keycap 方案 B 扁平琺瑯徽章; 全遊戲唯一一份, 面板 / 教學 / drawKeyLine 共用) ----------
+  // 深墨底 + 米白字(方向鍵畫幾何箭頭)+ 米白內圈線 + 上半淡反光, 底下一道薄硬邊是唯一的厚度。
+  // 造型依功能: Z / X 圓角方、方向鍵正圓、Esc / M 長膠囊。高 = 1.5 px; 佔位寬至少 1.7 px(正圓置中在佔位內)。
+  // 狀態 st: 'normal' 深墨 / 'hot' 金面(此刻按得下去)/ 'done' 金面 + 右上綠勾 / 'press' 硬邊消失往下貼平
+  var KEY_NAME = { z: 'Z', x: 'X', left: '←', right: '→', up: '↑', down: '↓', esc: 'Esc', m: 'M' };
+  var ARROW_ANG = { '←': Math.PI, '→': 0, '↑': -Math.PI / 2, '↓': Math.PI / 2 };
+  function keyLabel(k) { // 介面代碼('z'、'left'…)或畫面字('Z'、'←'…)→ 畫面字; 表外值 → ''(畫空徽章, 不畫成任何合法按鍵)
+    if (typeof k !== 'string') return '';
+    if (KEY_NAME[k] !== undefined) return KEY_NAME[k];
+    if (KEY_NAME[k.toLowerCase()] !== undefined) return KEY_NAME[k.toLowerCase()];
+    return (ARROW_ANG[k] !== undefined || k === 'Z' || k === 'X' || k === 'Esc' || k === 'M') ? k : '';
+  }
+  function keyShape(label) { return ARROW_ANG[label] !== undefined ? 'round' : ((label === 'Esc' || label === 'M') ? 'pill' : 'square'); }
+  function keyFaceW(ctx, label, px) { // 徽章本體寬
+    var h = px * 1.5, s = keyShape(label);
+    if (s === 'pill') return Math.max(h * 1.55, tw(ctx, label, px * 0.66, true) + px * 1.1);
+    return s === 'round' ? h : px * 1.7;
+  }
+  function keyW(ctx, label, px) { return Math.max(px * 1.7, keyFaceW(ctx, keyLabel(label), px)); } // 佔位寬
+  function keyArrow(ctx, label, cx, cy, s, col) {
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(ARROW_ANG[label]);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(-s * 0.42, 0); ctx.lineTo(s * 0.08, 0); ctx.lineWidth = Math.max(1.6, s * 0.17); ctx.strokeStyle = col; ctx.stroke();
+    poly(ctx, [s * 0.46, 0, s * 0.02, -s * 0.36, s * 0.02, s * 0.36]); ctx.fillStyle = col; ctx.fill();
+    ctx.lineWidth = Math.max(1, s * 0.06); ctx.strokeStyle = col; ctx.stroke();
+    ctx.restore();
+  }
+  function keyPath(ctx, s, x, y, w, h) {
+    if (s === 'round') circle(ctx, x + w / 2, y + h / 2, h / 2);
+    else rr(ctx, x, y, w, h, s === 'pill' ? h / 2 : h * 0.28);
+  }
+  function keycap(ctx, label, cx, cy, px, st) {
+    label = keyLabel(label); px = clamp(num(px, 16), 4, 200);
+    if (st === true) st = 'hot'; else if (st !== 'hot' && st !== 'done' && st !== 'press') st = 'normal';
+    var s = keyShape(label), w = keyFaceW(ctx, label, px), h = px * 1.5;
+    var press = st === 'press', hot = st === 'hot' || st === 'done';
+    var lip = press ? 0 : Math.max(1.5, px * 0.16);
+    var x = cx - w / 2, y = cy - h / 2 - lip / 2 + (press ? px * 0.1 : 0);
+    var fill = hot ? K.select : K.ink, ring = hot ? '#fff6c8' : K.cream, ink = hot ? K.ink : K.cream, lipC = hot ? K.selectDeep : K.edge;
     ctx.save();
-    rr(ctx, cx - w / 2, cy - h / 2 + 3, w, h, 4); ctx.fillStyle = hot ? K.selectDeep : '#8f8471'; ctx.fill();
-    rr(ctx, cx - w / 2, cy - h / 2, w, h, 4); ctx.fillStyle = hot ? K.select : '#ece4d2'; ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = K.edge; ctx.stroke();
-    text(ctx, label, cx, cy + 0.5, px, K.ink, 'center', true);
-    if (done) {
-      circle(ctx, cx + w / 2 - 2, cy - h / 2 + 1, px * 0.42); ctx.fillStyle = K.good; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = '#ffffff'; ctx.stroke();
-      var r = px * 0.42, ox = cx + w / 2 - 2, oy = cy - h / 2 + 1;
-      ctx.beginPath(); ctx.moveTo(ox - r * 0.5, oy); ctx.lineTo(ox - r * 0.1, oy + r * 0.4); ctx.lineTo(ox + r * 0.55, oy - r * 0.4); ctx.lineWidth = 1.8; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+    if (lip > 0) { keyPath(ctx, s, x, y + lip, w, h); ctx.fillStyle = lipC; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = K.edge; ctx.stroke(); }
+    keyPath(ctx, s, x, y, w, h); ctx.fillStyle = fill; ctx.fill();
+    ctx.lineWidth = Math.max(1.2, px * 0.09); ctx.strokeStyle = K.edge; ctx.stroke();
+    ctx.save(); keyPath(ctx, s, x, y, w, h); ctx.clip();
+    ctx.fillStyle = hot ? 'rgba(255,255,255,0.35)' : 'rgba(255,240,210,0.12)';
+    ell(ctx, cx, y - h * 0.15, w * 0.62, h * 0.5); ctx.fill();
+    ctx.restore();
+    var ins = Math.max(1.8, px * 0.13);
+    if (s === 'round') circle(ctx, cx, y + h / 2, h / 2 - ins);
+    else rr(ctx, x + ins, y + ins, w - ins * 2, h - ins * 2, s === 'pill' ? (h - ins * 2) / 2 : h * 0.2);
+    ctx.save(); ctx.lineWidth = Math.max(1, px * 0.07); ctx.strokeStyle = ring; ctx.globalAlpha *= hot ? 0.9 : 0.75; ctx.stroke(); ctx.restore();
+    if (ARROW_ANG[label] !== undefined) keyArrow(ctx, label, cx, y + h / 2, px * 0.78, ink);
+    else if (label) text(ctx, label, cx, y + h / 2 + px * 0.03, s === 'pill' ? px * 0.66 : px * 0.9, ink, 'center', true);
+    if (st === 'done') {
+      var r = Math.max(4, px * 0.34), ox = x + w - px * 0.12, oy = y + px * 0.12;
+      circle(ctx, ox, oy, r); ctx.fillStyle = K.good; ctx.fill(); ctx.lineWidth = Math.max(1, r * 0.22); ctx.strokeStyle = '#ffffff'; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ox - r * 0.5, oy); ctx.lineTo(ox - r * 0.1, oy + r * 0.4); ctx.lineTo(ox + r * 0.55, oy - r * 0.4);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(1.4, r * 0.32); ctx.stroke();
     }
+    ctx.restore();
+    return keyW(ctx, label, px);
+  }
+  // 一行嵌按鍵的文字。parts: 字串 / { key, st } / { t, col }(t = 指定顏色的字); tone 'board'(米白字 + 深描邊)| 'parch'(深墨字)
+  // align 'left' | 'center' | 'right'; keyDy = 按鍵額外上下位移(輕彈用)。回傳整行寬
+  function klineW(ctx, parts, px) {
+    var g = px * 0.2, total = 0, n = 0;
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i], w;
+      if (typeof p === 'string') w = p ? tw(ctx, p, px, true) : 0;
+      else if (p && typeof p === 'object' && p.key !== undefined) w = keyW(ctx, p.key, px);
+      else if (p && typeof p === 'object' && typeof p.t === 'string') w = tw(ctx, p.t, px, true);
+      else continue;
+      total += w + (n ? g : 0); n++;
+    }
+    return total;
+  }
+  function kline(ctx, parts, x, y, px, align, tone, keyDy) {
+    parts = arr(parts); px = clamp(num(px, 16), 4, 200);
+    var g = px * 0.2, total = klineW(ctx, parts, px), n = 0;
+    var col = tone === 'parch' ? K.ink : K.cream, ol = tone === 'parch' ? 0 : Math.max(2, px * 0.2);
+    var cx = align === 'center' ? x - total / 2 : (align === 'right' ? x - total : x);
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i], w;
+      if (typeof p === 'string') {
+        if (n) cx += g;
+        w = p ? tw(ctx, p, px, true) : 0; if (p) text(ctx, p, cx, y + 0.5, px, col, 'left', true, ol, K.edge);
+      } else if (p && typeof p === 'object' && p.key !== undefined) {
+        if (n) cx += g;
+        w = keyW(ctx, p.key, px); keycap(ctx, p.key, cx + w / 2, y + (keyDy || 0), px, p.st);
+      } else if (p && typeof p === 'object' && typeof p.t === 'string') {
+        if (n) cx += g;
+        w = tw(ctx, p.t, px, true); text(ctx, p.t, cx, y + 0.5, px, p.col || col, 'left', true, ol, K.edge);
+      } else continue;
+      cx += w; n++;
+    }
+    return total;
+  }
+  // 面板提示列: items = [[鍵, 動作, hot]...]; 鍵可寫成 '↑↓' / '←→'(拆成兩顆), 每組 =「按鍵 + 動作」, 組間留 1.2 px
+  function keyRow(ctx, items, x, y, px, align, tone) {
+    var parts = [], i, j;
+    for (i = 0; i < items.length; i++) {
+      var k = String(items[i][0]), keys = ARROW_ANG[k.charAt(0)] !== undefined ? k.split('') : [k];
+      for (j = 0; j < keys.length; j++) parts.push({ key: keys[j], st: items[i][2] === true ? 'hot' : 'normal' });
+      parts.push(items[i][1] + (i < items.length - 1 ? '    ' : ''));
+    }
+    return kline(ctx, parts, x, y, px, align, tone || 'board');
+  }
+  // 動作章內嵌按鍵: 章 = 'hot' 金底 / 'idle' 米白 / 'off' 灰 + 紅斜線(付不起); 章內「[鍵] 動作」
+  function actKey(ctx, key, s, x, y, state, align, px) {
+    px = px || 12;
+    var inner = klineW(ctx, [{ key: key }, s], px), w = inner + px * 1.0, h = px * 1.95;
+    var lx = align === 'right' ? x - w : (align === 'center' ? x - w / 2 : x);
+    ctx.save();
+    if (state === 'hot') { rr(ctx, lx, y - h / 2 + 3, w, h, 5); ctx.fillStyle = K.selectDeep; ctx.fill(); }
+    rr(ctx, lx, y - h / 2, w, h, 5);
+    ctx.fillStyle = state === 'hot' ? K.select : state === 'off' ? '#9a9384' : '#fbf6ea'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = state === 'off' ? '#6a6456' : K.edge; ctx.stroke();
+    if (state === 'off') ctx.globalAlpha *= 0.55;
+    kline(ctx, [{ key: key }, s], lx + px * 0.5, y, px, 'left', 'parch');
+    if (state === 'off') { ctx.globalAlpha /= 0.55; ctx.beginPath(); ctx.moveTo(lx + 4, y + h / 2 - 4); ctx.lineTo(lx + w - 4, y - h / 2 + 4); ctx.lineWidth = 2; ctx.strokeStyle = K.short; ctx.stroke(); }
     ctx.restore();
     return w;
   }
-  function keyAct(ctx, k, s, x, y, px, hot, col, oc) {
-    var kw = keyW(ctx, k, px);
-    keycap(ctx, k, x + kw / 2, y, px, hot);
-    text(ctx, s, x + kw + 5, y, px, col || K.cream, 'left', true, oc === null ? 0 : 3, oc || K.edge);
-    return kw + 5 + tw(ctx, s, px, true);
-  }
-  // 一排「鍵 + 動作」; align 'center' / 'left'
-  function keyRow(ctx, items, x, y, px, align, col, oc) {
-    var total = 0, i, ws = [];
-    for (i = 0; i < items.length; i++) { ws.push(keyW(ctx, items[i][0], px) + 5 + tw(ctx, items[i][1], px, true)); total += ws[i] + (i ? px * 1.2 : 0); }
-    var cx = align === 'left' ? x : x - total / 2;
-    for (i = 0; i < items.length; i++) { if (i) cx += px * 1.2; keyAct(ctx, items[i][0], items[i][1], cx, y, px, items[i][2] === true, col, oc); cx += ws[i]; }
-    return total;
+  function drawKeyLine(ctx, st) {
+    st = obj(st);
+    var x = num(st.x, 440), y = num(st.y, 702), px = clamp(num(st.px, 16), 12, 30);
+    var align = oneOf(st.align, ['left', 'center', 'right'], 'left'), tone = st.tone === 'parch' ? 'parch' : 'board';
+    var parts = arr(st.parts).slice(0, 16), out = [];
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (typeof p === 'string') out.push(p);
+      else if (typeof p === 'number' && isFinite(p)) out.push(String(p));
+      else if (p && typeof p === 'object') out.push({ key: p.key });
+    }
+    ctx.save();
+    var w = kline(ctx, out, x, y, px, align, tone);
+    ctx.restore();
+    return w;
   }
   // 木板面板: 底色 + 水平板縫 + 外框 + 四角釘
   function board(ctx, x, y, w, h, tint) {
@@ -1248,17 +1356,15 @@
 
   function drawGoalPrompt(ctx, st) {
     st = obj(st);
-    var x = num(st.x, 640), y = num(st.y, 360), first = st.first === true, t = num(st.t, 0);
+    var x = num(st.x, 640), y = num(st.y, 360), t = num(st.t, 0);
     var bw = 200, bh = 48, bx = clamp(x - bw / 2, 8, 1272 - bw), by = y - 8 - bh, cx = bx + bw / 2, cy = by + bh / 2;
     ctx.save();
-    if (first) { var s = 1.15 * (1 + 0.05 * Math.sin(t * TAU / 0.8)); ctx.translate(cx, cy); ctx.scale(s, s); ctx.translate(-cx, -cy); }
     poly(ctx, [x - 9, by + bh - 1, x + 9, by + bh - 1, x, y - 2]); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = K.edge; ctx.stroke();
-    rr(ctx, bx, by, bw, bh, 8); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = first ? 4 : 3; ctx.strokeStyle = first ? K.select : K.edge; ctx.stroke();
+    rr(ctx, bx, by, bw, bh, 8); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = K.edge; ctx.stroke();
     ctx.fillStyle = K.parch; ctx.fillRect(x - 7.5, by + bh - 3, 15, 4);
+    // 「按 [↓] 完成關卡」: ↓ 用按鍵外觀嵌在句中(金面 = 此刻按得下去), 輕輕上下彈
     var bob = Math.sin(t * TAU / 0.6) * 1.5;
-    text(ctx, '按', bx + 22, cy + 1, 18, K.ink, 'left', true);
-    keycap(ctx, '↓', bx + 66, cy - 1 + bob, 18, true);
-    text(ctx, '完成關卡', bx + 88, cy + 1, 18, K.ink, 'left', true);
+    kline(ctx, ['按', { key: 'down', st: 'hot' }, '完成關卡'], cx, cy, 18, 'center', 'parch', bob - 1);
     ctx.restore();
   }
 
@@ -2135,17 +2241,8 @@
     ctx.restore();
   }
 
-  // ================= 新手教學(羊皮紙橫幅 + 金色指示箭頭; 教學專用長相) =================
-  function tutArrow(ctx, tip, t) {
-    var x = num(tip.x, 640), y = num(tip.y, 360), dir = oneOf(tip.dir, ['down', 'up', 'left', 'right'], 'down');
-    var o = 6 * (0.5 - 0.5 * Math.cos(t * TAU / 0.8));
-    var ang = { down: Math.PI / 2, up: -Math.PI / 2, left: Math.PI, right: 0 }[dir];
-    ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.translate(-o, 0);
-    poly(ctx, [0, 0, -16, -12, -16, -5, -36, -5, -36, 5, -16, 5, -16, 12]);
-    ctx.fillStyle = K.select; ctx.fill(); ctx.lineJoin = 'round'; ctx.lineWidth = 2.5; ctx.strokeStyle = K.edge; ctx.stroke();
-    poly(ctx, [-3, 0, -14, -8, -14, -2]); ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fill();
-    ctx.restore();
-  }
+  // ================= 新手教學(polish 第 5 輪重做: tut-arrow B 大箭頭 + tut-text B 泡泡 + tut-spotlight B 聚光燈) =================
+  // 教學專用長相: 金色漫畫貼紙大箭頭、深色木板泡泡 + 每字彈跳; 金 = 介面選中 / 教學指向(全遊戲同一個意思)
   function stamp(ctx, x, y, q) {
     var s = q < 0.3 ? 1.6 - 0.6 * (q / 0.3) : 1;
     ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(-0.2);
@@ -2158,31 +2255,592 @@
     for (var i = 0; i < n; i++) { var a = i * TAU / n - Math.PI / 2, d = R * eOut(q); star4(ctx, x + Math.cos(a) * d, y + Math.sin(a) * d, 5 * (1 - q * 0.6)); ctx.fill(); }
     ctx.restore();
   }
+  function eBack(p) { p = clamp(p, 0, 1); var c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); }
+  function eInOut(p) { p = clamp(p, 0, 1); return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; }
+  // 向量小工具(大箭頭用)
+  function V(x, y) { return { x: x, y: y }; }
+  function vAdd(a, b) { return V(a.x + b.x, a.y + b.y); }
+  function vSub(a, b) { return V(a.x - b.x, a.y - b.y); }
+  function vMul(a, k) { return V(a.x * k, a.y * k); }
+  function vLen(a) { return Math.sqrt(a.x * a.x + a.y * a.y) || 1; }
+  function vNorm(a) { var l = vLen(a); return V(a.x / l, a.y / l); }
+  function vPerp(a) { return V(-a.y, a.x); }
+  function vRot(a, r) { var c = Math.cos(r), s = Math.sin(r); return V(a.x * c - a.y * s, a.x * s + a.y * c); }
+  function vQuad(a, c, b, u) { var v = 1 - u; return V(v * v * a.x + 2 * v * u * c.x + u * u * b.x, v * v * a.y + 2 * v * u * c.y + u * u * b.y); }
+  function polyV(ctx, pts) { ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y); }
+
+  // ---------- 大箭頭(tut-arrow B 漫畫貼紙彎箭頭) ----------
+  // 前粗後細的實心緞帶(半寬 7 → 16)+ 帶倒鉤的大箭頭(半寬 40)+ 右下深金厚度 + 粗黑描邊。
+  // 1 秒一圈: 0~0.4 往箭尾方向拉弓退 12px(彎度加大、尾端微抖)→ 0.4~0.5 彈回 → 0.5 起尖端到 (tipX,tipY), 整支沿指向壓扁回彈 + 尖端往箭尾側扇開的衝擊刺。
+  // grow 0~1 = 進場(從箭尾往尖端長出來)。尖端最遠只到 tip(描邊也收在 tip 之內)
+  function tutArrowB(ctx, a, t, grow) {
+    var S0 = V(num(a.tailX, 600), num(a.tailY, 300)), T = V(num(a.tipX, 640), num(a.tipY, 360)), bend = clamp(num(a.bend, 0), -0.45, 0.45);
+    var D0 = vSub(T, S0); if (vLen(D0) < 30) D0 = V(0, 30); // 尖端與箭尾太近時拉開成直的(不拋錯)
+    var dirST = vNorm(D0), S = vAdd(S0, vMul(dirST, 12)); // 箭尾內縮 12: 拉弓退 12、彎曲的尾端角與厚度加起來, 尾端仍在 tail 點外 8px 內
+    var c = fr(t), pull = 0, k = bend, sq = 1, trem = 0, impact = -1, speed = 0;
+    if (c < 0.4) { var p = sm(c / 0.4); pull = 12 * p; k = bend * (1 + 0.35 * p); if (c > 0.28) trem = (c - 0.28) / 0.12; }
+    else if (c < 0.5) { var q = (c - 0.4) / 0.1; pull = 12 * (1 - q * q); k = bend * (1 + 0.35 * (1 - q)); speed = q; }
+    else { var x = c - 0.5, damp = Math.exp(-7 * x) * Math.cos(18 * x); sq = 1 - 0.2 * Math.max(0, damp); k = bend * (1 - 0.15 * damp); /* 只壓扁不拉長: 回彈時箭尾不往後甩 */ impact = x / 0.3; speed = clamp(1 - x / 0.12, 0, 1); }
+    if (grow < 1) { pull = 0; trem = 0; impact = -1; speed = 0; sq = 1; }
+    var D = vSub(T, S), L = vLen(D), n0 = vPerp(vNorm(D));
+    var C = vAdd(vMul(vAdd(S, T), 0.5), vMul(n0, -k * L)); // 正值 = 往「箭尾 → 尖端」方向的左側鼓出(畫布 y 向下, 左側 = −perp)
+    var dh = vNorm(vSub(T, C)), nh = vPerp(dh);
+    var back = vMul(dh, -pull);
+    if (trem > 0) back = vAdd(back, V(Math.sin(t * 157) * 1.5 * trem, Math.cos(t * 131) * 1.5 * trem));
+    var P = vAdd(vSub(T, vMul(dh, 2.5)), back), S2 = vAdd(S, back), C2 = vAdd(C, back); // 尖端內縮 2.5: 粗描邊外緣剛好到 tip
+    var hl = Math.min(56, L * 0.45), B = vSub(P, vMul(dh, hl));
+    var N = 24, left = [], right = [], i;
+    for (i = 0; i <= N; i++) {
+      var u = i / N, pt = vQuad(S2, C2, B, u);
+      var tg = vNorm(vAdd(vMul(vSub(C2, S2), 2 * (1 - u)), vMul(vSub(B, C2), 2 * u))), nn = vPerp(tg), w = 7 + 9 * u;
+      left.push(vAdd(pt, vMul(nn, w))); right.push(vSub(pt, vMul(nn, w)));
+    }
+    var dir0 = vNorm(vSub(C2, S2));
+    var shape = left.slice();
+    shape.push(vAdd(B, vMul(nh, 16)), vAdd(vAdd(B, vMul(nh, 40)), vMul(dh, -12)), P, vAdd(vSub(B, vMul(nh, 40)), vMul(dh, -12)), vSub(B, vMul(nh, 16)));
+    for (i = N; i >= 0; i--) shape.push(right[i]);
+    shape.push(vAdd(S2, vMul(dir0, 9)));
+    function path() { polyV(ctx, shape); ctx.closePath(); }
+    ctx.save();
+    if (grow < 1) { var g = eOut(grow); ctx.translate(S0.x, S0.y); ctx.scale(g, g); ctx.translate(-S0.x, -S0.y); ctx.globalAlpha *= clamp(grow * 3, 0, 1); }
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    if (speed > 0) { // 彈射時速度線: 貼在箭身後段兩側(不畫到箭尾後方)
+      ctx.save(); ctx.globalAlpha *= speed; ctx.strokeStyle = '#fff6c8'; ctx.lineWidth = 3;
+      var nS = vPerp(dir0);
+      for (i = -1; i <= 1; i++) {
+        if (i === 0) continue; var a0 = vAdd(vAdd(S2, vMul(dir0, 14)), vMul(nS, i * 15)), a1 = vAdd(vAdd(S2, vMul(dir0, 40)), vMul(nS, i * 18));
+        ctx.beginPath(); ctx.moveTo(a0.x, a0.y); ctx.lineTo(a1.x, a1.y); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    var ang = Math.atan2(dh.y, dh.x);
+    ctx.translate(P.x, P.y); ctx.rotate(ang); ctx.scale(sq, 1 + (1 - sq) * 0.7); ctx.rotate(-ang); ctx.translate(-P.x, -P.y);
+    // 厚度: 往右下擠出, 但不往指向方向前進(不超過尖端)
+    var off = V(4, 5), pr = off.x * dh.x + off.y * dh.y; if (pr > 0) off = vSub(off, vMul(dh, pr)); else if (pr < -2) off = vSub(off, vMul(dh, pr + 2));
+    ctx.save(); ctx.translate(off.x, off.y); path(); ctx.fillStyle = K.selectDeep; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = K.edge; ctx.stroke(); ctx.restore();
+    path(); ctx.fillStyle = lin(ctx, S2.x, S2.y, P.x, P.y, [0, '#ffe98a', 0.6, K.select, 1, '#ffc928']); ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = K.edge; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 3.5;
+    var hp = [];
+    for (i = 3; i <= 19; i++) { var uu = i / N, pp = vQuad(S2, C2, B, uu), tt = vNorm(vAdd(vMul(vSub(C2, S2), 2 * (1 - uu)), vMul(vSub(B, C2), 2 * uu))); hp.push(vAdd(pp, vMul(vPerp(tt), (7 + 9 * uu) * 0.45))); }
+    polyV(ctx, hp); ctx.stroke();
+    var h0 = vAdd(vAdd(B, vMul(nh, 22)), vMul(dh, 4)), h1 = vAdd(vSub(P, vMul(dh, 16)), vMul(nh, 5));
+    ctx.beginPath(); ctx.moveTo(h0.x, h0.y); ctx.lineTo(h1.x, h1.y); ctx.stroke();
+    ctx.restore();
+    if (impact >= 0 && impact <= 1) { // 衝擊刺: 尖端往箭尾那側扇開(與指向夾角 < 90°), 不蓋目標
+      ctx.save(); ctx.globalAlpha *= 1 - impact; ctx.lineJoin = 'round';
+      var bk = vMul(dh, -1), angs = [0.75, -0.75, 1.1, -1.1, 1.4, -1.4];
+      for (i = 0; i < angs.length; i++) {
+        var dv = vRot(bk, angs[i]), pv = vPerp(dv), r0 = 34 + 12 * impact, r1 = r0 + 8 + 16 * (1 - impact) * (i < 2 ? 1.2 : 1);
+        var b1 = vAdd(vAdd(P, vMul(dv, r0)), vMul(pv, 4)), b2 = vSub(vAdd(P, vMul(dv, r0)), vMul(pv, 4)), tp = vAdd(P, vMul(dv, r1));
+        ctx.beginPath(); ctx.moveTo(b1.x, b1.y); ctx.lineTo(tp.x, tp.y); ctx.lineTo(b2.x, b2.y); ctx.closePath();
+        ctx.fillStyle = i < 2 ? '#ffffff' : K.select; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // ---------- 文字泡泡(tut-text B) ----------
+  var TB = { px: 30, lh: 46, padX: 30, padY: 22, maxW: 560, kpx: 24, tail: 14 };
+  var PUNCT_HOLD = ',，、!！。';               // 之後多停 0.18 秒
+  var NO_LEAD = ',，、!！。?？;；:：)）」』》〉'; // 不放行首
+  function tutTokens(s) { // [關鍵詞]、{Z} 句中按鍵; 其餘每字一個
+    var o = [], i = 0, hl = false;
+    s = typeof s === 'string' ? s : '';
+    while (i < s.length && o.length < 400) {
+      var c = s.charAt(i);
+      if (c === '[') { hl = true; i++; continue; }
+      if (c === ']') { hl = false; i++; continue; }
+      if (c === '{') { var j = s.indexOf('}', i); if (j > i && j - i <= 6) { o.push({ k: s.substring(i + 1, j) }); i = j + 1; continue; } }
+      o.push({ c: c, hl: hl }); i++;
+    }
+    return o;
+  }
+  function tutTimes(tk) { // 每個字出現的累計時刻(與 RD 同一條規則)
+    var t = 0, r = [];
+    for (var i = 0; i < tk.length; i++) { r.push(t); t += tk[i].k !== undefined ? 0.16 : 0.077; if (tk[i].c && PUNCT_HOLD.indexOf(tk[i].c) >= 0) t += 0.18; }
+    return r;
+  }
+  function tutLayout(ctx, tk) {
+    var x = 0, line = 0, out = [], lw = [0], kw = TB.px * 1.7;
+    for (var i = 0; i < tk.length; i++) {
+      var k = tk[i], w = k.k !== undefined ? kw : tw(ctx, k.c, TB.px, true);
+      if (x + w > TB.maxW && x > 0 && !(k.c && NO_LEAD.indexOf(k.c) >= 0)) { x = 0; line++; lw.push(0); }
+      if (x === 0 && k.c === ' ') w = 0;
+      out.push({ x: x, line: line, w: w }); x += w; lw[line] = x;
+    }
+    var mx = 0; for (i = 0; i < lw.length; i++) mx = Math.max(mx, lw[i]);
+    return { items: out, lines: lw.length, maxW: mx };
+  }
+  function tutBubble(ctx, b, t) {
+    var x = num(b.x, 640), y = num(b.y, 300), place = b.place === 'below' ? 'below' : 'above';
+    var hasCont = typeof b.cont === 'string';
+    var tk1 = tutTokens(b.text), tk2 = hasCont ? tutTokens(b.cont) : [], tk = tk1.concat(tk2);
+    var r1 = tutTimes(tk1), r2 = tutTimes(tk2);
+    var Lf = tutLayout(ctx, tk), L1 = tutLayout(ctx, tk1);
+    var typeT = num(b.typeT, 0), contT = b.contT == null ? null : num(b.contT, 0);
+    var inQ = clamp(num(b.inT, 0.32), 0, 0.32) / 0.32, outT = b.outT == null ? null : clamp(num(b.outT, 0), 0, 0.25);
+    var bwF = Math.max(200, Lf.maxW + TB.padX * 2), bhF = Lf.lines * TB.lh + TB.padY * 2;
+    var bw = bwF, bh = bhF;
+    if (hasCont && contT != null && contT < 0.2) { // 接句: 0.2 秒長到新大小
+      var gq = sm(contT / 0.2), bw1 = Math.max(200, L1.maxW + TB.padX * 2), bh1 = L1.lines * TB.lh + TB.padY * 2;
+      bw = lerp(bw1, bwF, gq); bh = lerp(bh1, bhF, gq);
+    }
+    var bx = clamp(x - bw / 2, 20, 1260 - bw), by = place === 'above' ? y - bh : y;
+    var rootX = clamp(x, bx + 34, bx + bw - 34), tipY = place === 'above' ? by + bh + TB.tail : by - TB.tail, edgeY = place === 'above' ? by + bh : by;
+    var sc = 0.6 + 0.4 * eBack(inQ), al = clamp(inQ / 0.6, 0, 1);
+    if (outT != null) { var oq = outT / 0.25; sc *= 1 - 0.85 * eOut(oq); al *= 1 - oq; }
+    if (al <= 0.001) return;
+    ctx.save();
+    ctx.globalAlpha *= al;
+    ctx.translate(x, tipY); ctx.scale(sc, sc); ctx.translate(-x, -tipY);
+    // 木板泡泡: 落影 + 深木板 + 板縫 + 深邊 + 內側淡金線 + 尾巴(長 14, 在泡泡外)
+    var dirY = place === 'above' ? 1 : -1;
+    rr(ctx, bx + 3, by + 6, bw, bh, 14); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill();
+    rr(ctx, bx, by, bw, bh, 14); ctx.fillStyle = K.board; ctx.fill();
+    poly(ctx, [rootX - 14, edgeY - dirY * 2, rootX + 14, edgeY - dirY * 2, x, tipY]); ctx.fill();
+    ctx.save(); rr(ctx, bx, by, bw, bh, 14); ctx.clip();
+    for (var yy = by + 26; yy < by + bh; yy += 26) { ctx.fillStyle = K.seam; ctx.fillRect(bx, yy, bw, 1.5); }
+    ctx.restore();
+    ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = K.edge;
+    ctx.beginPath(); ctx.moveTo(rootX + 14, edgeY); ctx.lineTo(x, tipY); ctx.lineTo(rootX - 14, edgeY); ctx.stroke();
+    rr(ctx, bx + 1.5, by + 1.5, bw - 3, bh - 3, 13); ctx.stroke();
+    ctx.fillStyle = K.board; ctx.fillRect(rootX - 12.5, place === 'above' ? edgeY - 3 : edgeY - 0.5, 25, 3.5);
+    rr(ctx, bx + 6, by + 6, bw - 12, bh - 12, 9); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,216,74,0.35)'; ctx.stroke();
+    // 字: 每字從下方 10px 彈起、回彈落定(0.18 秒); 新字金色 0.3 秒內退成米白, 關鍵詞常駐金
+    var x0 = bx + TB.padX, y0 = by + TB.padY + TB.lh / 2, i;
+    ctx.save(); rr(ctx, bx, by, bw, bh, 14); ctx.clip(); // 接句長大中, 還沒到的字不畫出泡泡
+    for (i = 0; i < tk.length; i++) {
+      var first = i < tk1.length, rt = first ? r1[i] : r2[i - tk1.length], tt = first ? typeT : contT;
+      if (tt == null || tt < 0 || tt < rt) continue;
+      var it = Lf.items[i], age = tt - rt, q = seg(age, 0, 0.18), s = 0.4 + 0.6 * eBack(q), jy = 10 * (1 - eBack(q));
+      var cx = x0 + it.x + it.w / 2, cy = y0 + it.line * TB.lh + jy;
+      ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s);
+      if (tk[i].k !== undefined) keycap(ctx, tk[i].k, 0, -1, TB.kpx, 'normal');
+      else if (tk[i].c !== ' ') text(ctx, tk[i].c, 0, 1, TB.px, tk[i].hl ? K.select : mix(K.select, K.cream, seg(age, 0, 0.3)), 'center', true, 6, K.edge);
+      ctx.restore();
+    }
+    ctx.restore();
+    // 「按 Z 繼續」徽章: 右下角框線上騎一顆 Z 按鍵外觀 + 小字 label, 每秒外擴一圈金環(≤18px)並輕輕一鼓
+    var nx = b.next;
+    if (nx && typeof nx === 'object' && nx.show === true) {
+      var kx = bx + bw - 34, ky = by + bh, ph = fr(t), lab = str(nx.label, '繼續');
+      ctx.save();
+      circle(ctx, kx, ky, 18 + 18 * eOut(ph)); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,216,74,' + (0.85 * (1 - ph)).toFixed(3) + ')'; ctx.stroke();
+      var lw = tw(ctx, lab, 16, true) + 18;
+      rr(ctx, kx - 26 - lw, ky - 13, lw, 26, 6); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.stroke();
+      text(ctx, lab, kx - 26 - lw / 2, ky + 1, 16, K.ink, 'center', true);
+      var pop = 1 + 0.08 * Math.max(0, Math.sin(ph * TAU));
+      ctx.translate(kx, ky); ctx.scale(pop, pop); keycap(ctx, nx.key === 'x' ? 'x' : 'z', 0, 0, 20, 'hot');
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // ---------- 修復點聚光燈(tut-spotlight B) ----------
+  function rrPath(ctx, x, y, w, h, r) { // 加進目前路徑(不 beginPath)
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+  }
+  function spotClipOut(ctx, rects, e) { // 剪成「所有矩形外擴 e 的聯集之外」
+    for (var i = 0; i < rects.length; i++) {
+      var r = rects[i];
+      ctx.beginPath(); ctx.rect(-60, -60, W + 120, H + 120); rrPath(ctx, r[0] - e, r[1] - e, r[2] + 2 * e, r[3] + 2 * e, Math.max(2, e + 2)); ctx.clip('evenodd');
+    }
+  }
+  function tutSpot(ctx, spot, t) {
+    var kk = clamp(num(spot.k, 1), 0, 1), holes = arr(spot.holes).slice(0, 3), all = [], hs = [], i, j;
+    if (kk <= 0.001) return;
+    for (i = 0; i < holes.length; i++) {
+      var h = obj(holes[i]), rs = arr(h.rects).slice(0, 6), ok = [];
+      for (j = 0; j < rs.length; j++) { var r = arr(rs[j]); var q = [num(r[0], 0), num(r[1], 0), clamp(num(r[2], 0), 0, 1400), clamp(num(r[3], 0), 0, 800)]; ok.push(q); all.push(q); }
+      if (!ok.length) continue;
+      var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (j = 0; j < ok.length; j++) { x0 = Math.min(x0, ok[j][0]); y0 = Math.min(y0, ok[j][1]); x1 = Math.max(x1, ok[j][0] + ok[j][2]); y1 = Math.max(y1, ok[j][1] + ok[j][3]); }
+      hs.push({ rects: ok, cx: num(h.cx, (x0 + x1) / 2), cy: num(h.cy, (y0 + y1) / 2), x0: x0, y0: y0, x1: x1, y1: y1 });
+    }
+    var p = fr(t / 2.4), br = 16 + 3 * Math.sin(p * TAU); // 光洞外擴 ~16, 2.4 秒呼吸一圈
+    var LAYERS = 7, STEP = 7, DIM = 0.72 * kk, LA = 1 - Math.pow(1 - DIM, 1 / LAYERS);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 40, W, H - 40); ctx.clip(); // 暗幕只蓋 y 40~720(不蓋資訊列)
+    for (var L = 0; L < LAYERS; L++) { // 柔邊: 每層挖的洞比前一層大 7px, 越外越暗(約 49px 漸到 72%)
+      ctx.save(); spotClipOut(ctx, all, br + L * STEP);
+      ctx.fillStyle = 'rgba(6,7,16,' + LA.toFixed(4) + ')'; ctx.fillRect(0, 40, W, H - 40);
+      ctx.restore();
+    }
+    for (i = 0; i < hs.length; i++) { // 光錐: 從畫面上緣(資訊列下)打到光洞, 錐內塵粒往下飄
+      var hh = hs[i], ex = Math.min(170, (hh.x1 - hh.x0) / 2 + br) * 0.92, sx = hh.cx + 30 + 14 * Math.sin(p * TAU + i * 1.7), by = Math.max(60, hh.y0 - br);
+      ctx.save(); ctx.globalAlpha *= kk;
+      ctx.beginPath(); ctx.moveTo(sx - 16, 40); ctx.lineTo(sx + 16, 40); ctx.lineTo(hh.cx + ex, by); ctx.lineTo(hh.cx - ex, by); ctx.closePath();
+      ctx.fillStyle = lin(ctx, 0, 40, 0, by, [0, 'rgba(255,238,196,0.10)', 0.7, 'rgba(255,238,196,0.06)', 1, 'rgba(255,238,196,0.13)']); ctx.fill(); ctx.clip();
+      for (j = 0; j < 7; j++) {
+        var u = fr(p + j / 7), py = 40 + u * (by - 40), px = sx + (hh.cx - sx) * u + Math.sin(j * 2.3 + p * TAU) * ex * 0.6 * u;
+        ctx.globalAlpha = kk * 0.7 * Math.sin(Math.PI * u);
+        circle(ctx, px, py, 1.6 + (j % 3) * 0.6); ctx.fillStyle = '#fff3d0'; ctx.fill();
+      }
+      ctx.restore();
+    }
+    // 光緣: 聯集外緣一圈暖白細線 + 外暈(就是修復點的邊緣光)
+    ctx.save(); ctx.globalAlpha *= kk; spotClipOut(ctx, all, br);
+    ctx.shadowColor = 'rgba(255,226,150,0.95)'; ctx.shadowBlur = 12; ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,236,180,0.9)';
+    for (i = 0; i < all.length; i++) { var g = all[i], e = br + 1.25; ctx.beginPath(); rrPath(ctx, g[0] - e, g[1] - e, g[2] + 2 * e, g[3] + 2 * e, Math.max(2, e + 2)); ctx.stroke(); }
+    ctx.restore();
+    ctx.restore();
+  }
+
+  var TUT_STEPS = ['map_pick', 'prep_start', 'demo_you', 'demo_mat', 'demo_mon', 'demo_goal', 'demo_sites', 'gate', 'map_replay', 'map_slow', 'map_upgrade', 'map_shop'];
   function drawTutorial(ctx, st) {
     st = obj(st);
-    var stage = str(st.stage, ''), s = str(st.text, ''), keys = arr(st.keys).slice(0, 3), pressed = arr(st.pressed), t = num(st.t, 0);
-    var bx = num(st.bx, 340), by = num(st.by, 46), bw = clamp(num(st.bw, 600), 40, 1280), bh = clamp(num(st.bh, 48), 20, 120);
-    var tip = (st.tip && typeof st.tip === 'object') ? st.tip : null;
-    var dDur = Math.max(0.01, num(st.doneDur, 0.6)), dT = clamp(num(st.doneT, dDur), 0, dDur), done = dT < dDur, dq = dT / dDur;
-    var a = done && dT > dDur - 0.2 ? (dDur - dT) / 0.2 : 1, al = clamp(num(st.alpha, 1), 0, 1);
-    // 指示箭頭不乘 alpha(它本來就貼著物件, 變淡會找不到); 完成特效期間不畫箭頭
-    if (tip && !done) { ctx.save(); tutArrow(ctx, tip, t); ctx.restore(); }
-    // 橫幅本體(文字、鍵帽、完成特效)乘 alpha: 關卡內碰到角色 / 怪物 / 素材 / 飛行物時 RD 傳 0.3
-    ctx.save(); ctx.globalAlpha *= clamp(a, 0, 1) * al;
-    // 階段 '6' 的完成特效: RD 把橫幅框設在「按 ↓」泡泡上(200×48), 這裡照一般完成特效畫, 蓋在泡泡上
-    rr(ctx, bx, by + 3, bw, bh, 8); ctx.fillStyle = 'rgba(10,6,4,0.45)'; ctx.fill();
-    rr(ctx, bx, by, bw, bh, 8); ctx.fillStyle = done ? mix('#efe3c6', '#ffd84a', Math.min(1, dq * 3)) : K.parch; ctx.fill();
-    ctx.lineWidth = 2.5; ctx.strokeStyle = done ? K.selectDeep : K.edge; ctx.stroke();
-    ctx.fillStyle = K.select; rr(ctx, bx + 6, by + 6, 6, bh - 12, 3); ctx.fill();
-    var px = bh >= 46 ? 20 : 18, kp = Math.round(px * 0.85), gap = 6, i, labels = [];
-    for (i = 0; i < keys.length; i++) labels.push(KEY_LABEL[keys[i]] || '?');
-    var wText = s ? tw(ctx, s, px, true) : 0, wKeys = 0;
-    for (i = 0; i < labels.length; i++) wKeys += keyW(ctx, labels[i], kp) + (i ? gap : 0);
-    var total = wText + (labels.length && s ? 16 : 0) + wKeys, room = bw - 60, x0 = bx + 18 + Math.max(0, (room - total) / 2), cy = by + bh / 2;
-    if (s) text(ctx, s, x0, cy + 1, px, K.ink, 'left', true);
-    var kx = x0 + wText + (s ? 16 : 0);
-    for (i = 0; i < labels.length; i++) { var kw = keyW(ctx, labels[i], kp); keycap(ctx, labels[i], kx + kw / 2, cy - 1, kp, pressed[i] === true, pressed[i] === true); kx += kw + gap; }
-    if (done) { stamp(ctx, bx + bw - 26, cy, dq); burst(ctx, bx + bw - 26, cy, dq, 6, 40); }
+    var step = oneOf(st.step, TUT_STEPS, ''), t = num(st.t, 0);
+    var arrows = arr(st.arrows).slice(0, 3), aT = clamp(num(st.arrowsT, 0.25), 0, 0.25), grow = aT / 0.25;
+    var bubble = (st.bubble && typeof st.bubble === 'object') ? st.bubble : null;
+    var dDur = Math.max(0.01, num(st.doneDur, 0.3)), dT = clamp(num(st.doneT, dDur), 0, dDur), done = dT < dDur, dq = dT / dDur, i;
+    ctx.save();
+    if (st.spot && typeof st.spot === 'object') { ctx.save(); tutSpot(ctx, st.spot, t); ctx.restore(); }
+    // 完成特效(地圖 1、準備 1): 泡泡與箭頭一起縮進箭頭尖端 + 尖端噴 4 顆金星
+    var ax = 640, ay = 360;
+    if (arrows.length) { ax = num(obj(arrows[0]).tipX, 640); ay = num(obj(arrows[0]).tipY, 360); }
+    else if (bubble) { ax = num(bubble.x, 640); ay = num(bubble.y, 360); }
+    ctx.save();
+    if (done) { var s = 1 - sm(dq); ctx.translate(ax, ay); ctx.scale(Math.max(0.001, s), Math.max(0.001, s)); ctx.translate(-ax, -ay); }
+    for (i = 0; i < arrows.length; i++) { ctx.save(); tutArrowB(ctx, obj(arrows[i]), t - i * 0.15, done ? 1 : grow); ctx.restore(); }
+    if (bubble) tutBubble(ctx, bubble, t);
+    ctx.restore();
+    if (done) { // 4 顆金星往外噴(≤30px)
+      ctx.save(); ctx.globalAlpha *= 1 - 0.6 * dq; ctx.fillStyle = K.select;
+      for (i = 0; i < 4; i++) { var a = -Math.PI / 4 + i * Math.PI / 2, d = 30 * eOut(dq); star4(ctx, ax + Math.cos(a) * d, ay + Math.sin(a) * d, 7 * (1 - 0.5 * dq)); ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = K.edge; ctx.stroke(); }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // ================= 操作方式面板(ctrl-panel A 羊皮紙卷軸 + 逐組點亮) =================
+  var CP = { BW: 250, BH: 226, KF: 0.6, FX: 18, FY: 54 };
+  var CP_ROWS = [{ k: ['left', 'right'], s: '移動' }, { k: ['up'], s: '跳躍' }, { k: ['z'], s: '攻擊' }, { k: ['x'], s: '技能' }];
+  function cpRod(ctx, y, w) {
+    rr(ctx, -8, y - 6, w + 16, 12, 6); ctx.fillStyle = lin(ctx, 0, y - 6, 0, y + 6, [0, '#c98a4a', 0.5, '#8a5a2a', 1, '#4a2e14']); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.stroke();
+    for (var s = -1; s <= 1; s += 2) { circle(ctx, s < 0 ? -10 : w + 10, y, 7); ctx.fillStyle = K.nail; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.stroke(); }
+  }
+  // 卷軸卡(原點 = 紙左上, 原尺寸單位); h = 目前攤開高度; lit = 正在點亮的組(−1 = 無); tailA = 指向角色的小尖角
+  function cpCard(ctx, h, tailA, flash, lit) {
+    var BW = CP.BW, BH = CP.BH;
+    ctx.save();
+    if (h > 0.5) {
+      rr(ctx, 2, 4, BW, h, 4); ctx.fillStyle = 'rgba(10,6,4,0.4)'; ctx.fill();
+      rr(ctx, 0, 0, BW, h, 4); ctx.fillStyle = K.parch; ctx.fill();
+      ctx.lineWidth = 2 + 3 * flash; ctx.strokeStyle = flash > 0 ? 'rgba(255,216,74,' + (0.6 + 0.4 * flash).toFixed(3) + ')' : K.edge; ctx.stroke();
+      ctx.save(); rr(ctx, 0, 0, BW, h, 4); ctx.clip();
+      ctx.fillStyle = 'rgba(120,90,40,0.10)'; for (var yy = 18; yy < BH; yy += 22) ctx.fillRect(6, yy, BW - 12, 1);
+      ctx.fillStyle = K.select; rr(ctx, 14, 16, 6, 26, 3); ctx.fill();
+      text(ctx, '操作方式', BW / 2 + 4, 30, 22, K.ink, 'center', true);
+      ctx.fillStyle = 'rgba(43,33,24,0.35)'; ctx.fillRect(18, 52, BW - 36, 1.5);
+      for (var i = 0; i < CP_ROWS.length; i++) { // 4 列: 鍵欄中心 x 72, 功能字欄起點 x 128
+        var cy = 80 + i * 38, on = i === lit, dim = lit >= 0 && !on;
+        if (on) { rr(ctx, 10, cy - 17, BW - 20, 34, 6); ctx.fillStyle = 'rgba(255,216,74,0.42)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.selectDeep; ctx.stroke(); }
+        ctx.save(); if (dim) ctx.globalAlpha *= 0.5;
+        var ks = CP_ROWS[i].k, parts = [];
+        for (var j = 0; j < ks.length; j++) parts.push({ key: ks[j], st: on ? 'hot' : 'normal' });
+        kline(ctx, parts, 72, cy, 18, 'center', 'parch');
+        text(ctx, CP_ROWS[i].s, 128, cy + 1, 20, K.ink, 'left', true);
+        ctx.restore();
+        if (i < CP_ROWS.length - 1) { ctx.fillStyle = 'rgba(43,33,24,0.12)'; ctx.fillRect(24, cy + 19, BW - 48, 1); }
+      }
+      ctx.restore();
+      if (tailA > 0) {
+        ctx.save(); ctx.globalAlpha *= tailA;
+        poly(ctx, [BW / 2 - 11, h - 1, BW / 2, h + 12, BW / 2 + 11, h - 1]); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.stroke();
+        ctx.fillStyle = K.parch; ctx.fillRect(BW / 2 - 9, h - 8, 18, 8);
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+    cpRod(ctx, 0, BW); cpRod(ctx, Math.max(0, h), BW);
+  }
+  function drawCtrlPanel(ctx, st) {
+    st = obj(st);
+    var dur = Math.max(0.01, num(st.dur, 6.25)), T = clamp(num(st.T, dur), 0, dur) * 6.25 / dur; // 換算到 6.25 秒時間軸
+    var px = num(st.px, 100), py = num(st.py, 462), al = clamp(num(st.alpha, 1), 0, 1), t = num(st.t, 0);
+    var BW = CP.BW, BH = CP.BH, KF = CP.KF, FX = CP.FX, FY = CP.FY, i;
+    // 原尺寸位置: 紙底在角色頭頂上方 14px(py − 32), 水平置中在角色, 含木軸外框左緣 ≥ 12
+    var BIGX = clamp(px - BW / 2, 29, W - 29 - BW), BIGY = clamp(py - 32 - BH, 56, H - BH - 20);
+    function pathAt(s) { var cx = Math.max(24, BIGX - 40), cy = 60, u = 1 - s; /* 控制點不往左越過 x 24: 含木軸外框不出畫面 */ return { x: u * u * BIGX + 2 * u * s * cx + s * s * FX, y: u * u * BIGY + 2 * u * s * cy + s * s * FY }; }
+    ctx.save();
+    if (T >= 6.25) ctx.globalAlpha *= al; // 只在固定後讓路
+    if (T < 0.25) { // 捲起的卷軸從胸口冒出, 浮到頭頂上方並放大
+      var q = eOut(T / 0.25), k0 = lerp(0.25, 1, q);
+      ctx.globalAlpha *= clamp(q * 1.5, 0, 1);
+      ctx.translate(lerp(px, BIGX + BW / 2, q), lerp(py - 4, BIGY, q)); ctx.scale(k0, k0); ctx.translate(-BW / 2, 0);
+      cpCard(ctx, 0, 0, 0, -1);
+    } else if (T < 4.95) { // 攤開 → 逐組點亮 → 停住
+      var u = eOut(seg(T, 0.25, 0.85)), tail = seg(T, 0.75, 0.85), lit = -1;
+      if (T >= 0.85 && T < 4.45) lit = Math.min(3, Math.floor((T - 0.85) / 0.9));
+      ctx.translate(BIGX, BIGY);
+      cpCard(ctx, BH * u, tail, 0, lit);
+    } else if (T < 5.95) { // 尖角收起, 縮成 0.6 倍沿上拱弧線滑到左上角, 途中高度縮 25% 再攤回, 後方拖 5 顆金色光點
+      var s = eInOut(seg(T, 4.95, 5.95)), kk = lerp(1, KF, s), hh = BH * (1 - 0.25 * Math.sin(Math.PI * s)), tailB = 1 - seg(T, 4.95, 5.07);
+      for (i = 5; i >= 1; i--) {
+        var sp = eInOut(seg(T - i * 0.05, 4.95, 5.95)); if (sp <= 0) continue;
+        var pp = pathAt(sp), pk = lerp(1, KF, sp);
+        ctx.save(); ctx.globalAlpha *= 0.65 * (1 - i / 6) * (0.8 + 0.2 * Math.sin(t * 20 + i));
+        star4(ctx, pp.x + BW * pk / 2, pp.y + BH * pk / 2, 8 - i); ctx.fillStyle = K.select; ctx.fill(); ctx.restore();
+      }
+      var p = pathAt(s);
+      ctx.translate(p.x, p.y); ctx.scale(kk, kk);
+      cpCard(ctx, hh, tailB, 0, -1);
+    } else { // 落定(5.95~6.25 木軸輕彈 + 金框閃)→ 固定在左上角 (18,54) 150×136
+      var a = seg(T, 5.95, 6.25), bounce = 1 + 0.05 * Math.sin(Math.PI * a), fl = a < 1 ? 1 - a : 0;
+      ctx.translate(FX + BW * KF / 2, FY); ctx.scale(KF * bounce, KF * bounce); ctx.translate(-BW / 2, 0);
+      cpCard(ctx, BH, 0, fl, -1);
+      if (fl > 0) { ctx.globalAlpha *= fl; for (var j = 0; j < 4; j++) { star4(ctx, j % 2 ? BW + 12 : -12, j < 2 ? -6 : BH + 6, 10 * fl); ctx.fillStyle = K.select; ctx.fill(); } }
+    }
+    ctx.restore();
+  }
+
+  // ================= 重生落下(respawn C 碎片倒帶) =================
+  function drawRespawnFx(ctx, st) {
+    st = obj(st);
+    var x = num(st.x, 100), y = num(st.y, 462), cls = oneOf(st.cls, CLS, 'sword'), f = face(st.facing);
+    var dur = Math.max(0.01, num(st.dur, 1.6)), t = clamp(num(st.t, 0), 0, dur) * 1.6 / dur; // 換算到 1.6 秒時間軸
+    var GX = x, GY = y - 60, FORM = 1.05, DROP0 = 1.2, G = 2720, LAND = DROP0 + Math.sqrt(2 * 60 / G), FEET = y + 18;
+    var cols = SHARD_COL[cls] || SHARD_COL.sword, i;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+    // 承接死亡動畫的暗幕(約 70%, 角色周圍略淡); 1.15~1.6 掀開
+    var dk = 0.7 * (1 - eOut(seg(t, 1.15, 1.6)));
+    if (dk > 0.002) { ctx.fillStyle = rad(ctx, x, y, 30, 200, [0, 'rgba(10,6,20,' + (dk * 0.72).toFixed(3) + ')', 1, 'rgba(10,6,20,' + dk.toFixed(3) + ')']); ctx.fillRect(0, 0, W, H); }
+    var gl = seg(t, 0.5, FORM) * (1 - seg(t, FORM, FORM + 0.2)); // 聚合點微光(越聚越亮)
+    if (gl > 0) { circle(ctx, GX, GY, 34); ctx.fillStyle = rad(ctx, GX, GY, 0, 34, [0, 'rgba(255,255,255,' + (0.55 * gl).toFixed(3) + ')', 1, 'rgba(255,255,255,0)']); ctx.fill(); }
+    function shardAt(k, tt) { // 從畫面上緣散開處沿縮小的螺旋飛回人形格位
+      var c = k % 4, r = Math.floor(k / 4), tx = GX - 10.5 + c * 7, ty = GY - 13.5 + r * 9;
+      var sx = clamp(x - 120 + hash(k, 5) * 420, 10, W - 10), sy = 30 + hash(k, 6) * 60;
+      var t0 = 0.12 + hash(k, 7) * 0.25, pq = eInOut(seg(tt, t0, 0.95));
+      var bx = sx + (tx - sx) * pq, by = sy + (ty - sy) * pq, sw = (1 - pq) * (34 + hash(k, 8) * 30), an = hash(k, 9) * TAU + pq * 7;
+      return { x: bx + Math.cos(an) * sw, y: by + Math.sin(an) * sw * 0.6, rot: (1 - pq) * (hash(k, 1) - 0.5) * 14, p: pq, on: tt >= t0, t0: t0 };
+    }
+    function shardPath(sz) {
+      ctx.beginPath();
+      if (cls === 'sword') ctx.rect(-sz * 0.6, -sz * 0.6, sz * 1.2, sz * 1.2);
+      else if (cls === 'hunter') { ctx.moveTo(0, -sz); ctx.lineTo(sz * 0.9, sz * 0.7); ctx.lineTo(-sz * 0.9, sz * 0.7); ctx.closePath(); }
+      else ctx.arc(0, 0, sz * 0.7, 0, TAU);
+    }
+    if (t < FORM + 0.05) {
+      var fo = 1 - seg(t, FORM - 0.02, FORM + 0.05);
+      for (i = 0; i < 14; i++) {
+        var s = shardAt(i, t); if (!s.on) continue;
+        var sz = 3.2 + hash(i, 1) * 2.4;
+        ctx.save();
+        for (var k = 3; k >= 1; k--) { // 3 點淡拖尾
+          var o = shardAt(i, t - k * 0.035);
+          ctx.globalAlpha = 0.18 * (4 - k) / 3 * fo * (1 - s.p * 0.6);
+          circle(ctx, o.x, o.y, sz * 0.5); ctx.fillStyle = '#ffffff'; ctx.fill();
+        }
+        ctx.globalAlpha = fo * Math.min(1, seg(t, s.t0, s.t0 + 0.1) + 0.2);
+        ctx.translate(s.x, s.y); ctx.rotate(s.rot);
+        shardPath(sz); ctx.fillStyle = cols[i % cols.length]; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+        ctx.restore();
+      }
+    }
+    var ip = seg(t, FORM - 0.12, FORM + 0.04); // 成形: 往內收的白環(半徑 40 → 0)
+    if (ip > 0 && ip < 1) { ctx.save(); ctx.globalAlpha *= 0.3 + 0.7 * ip; circle(ctx, GX, GY, 40 * (1 - eOut(ip))); ctx.lineWidth = 1 + 2.5 * ip; ctx.strokeStyle = '#ffffff'; ctx.stroke(); ctx.restore(); }
+    if (t >= FORM) {
+      var cy = GY, pose = 'idle';
+      if (t >= DROP0 && t < LAND) { var uu = t - DROP0; cy = GY + 0.5 * G * uu * uu; pose = 'fall'; }
+      else if (t >= LAND) cy = y;
+      var wh = 1 - seg(t, FORM, FORM + 0.25); // 發白成形, 0.25 秒退回原色
+      ctx.save(); ctx.translate(x, cy);
+      heroFig(ctx, cls, f, { pose: pose });
+      if (wh > 0) { ctx.save(); ctx.globalAlpha *= wh; heroFig(ctx, cls, f, { pose: pose, tint: '#ffffff' }); ctx.restore(); }
+      ctx.restore();
+      if (t < FORM + 0.12) { ctx.save(); ctx.globalAlpha *= 0.9 * (1 - (t - FORM) / 0.12); circle(ctx, GX, GY, 24); ctx.fillStyle = rad(ctx, GX, GY, 0, 24, [0, 'rgba(255,255,255,1)', 1, 'rgba(255,255,255,0)']); ctx.fill(); ctx.restore(); }
+      var sp = seg(t, FORM, FORM + 0.3); // 身上 4 顆小星往外散
+      if (sp > 0 && sp < 1) {
+        ctx.save(); ctx.globalAlpha *= 1 - sp; ctx.fillStyle = '#ffffff';
+        for (var j = 0; j < 4; j++) { var a = j * TAU / 4 + 0.6, rr2 = 16 + 14 * eOut(sp); star4(ctx, GX + Math.cos(a) * rr2, GY + Math.sin(a) * rr2 * 1.2, 3); ctx.fill(); }
+        ctx.restore();
+      }
+    }
+    var dp = seg(t, LAND, LAND + 0.35); // 落地: 腳下兩撮小塵 + 地面一條短亮線(≤ 寬 40)
+    if (dp > 0 && dp < 1) {
+      ctx.save(); ctx.globalAlpha *= 1 - dp;
+      for (var m = -1; m <= 1; m += 2) { circle(ctx, x + m * (10 + 8 * eOut(dp)), FEET - 3 - 4 * Math.sin(Math.PI * dp), 3 + 1.5 * dp); ctx.fillStyle = '#e9ddc6'; ctx.fill(); }
+      var hw = 8 + 12 * eOut(dp);
+      ctx.beginPath(); ctx.moveTo(x - hw, FEET - 1); ctx.lineTo(x + hw, FEET - 1); ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // ================= 新手教學總結板(tut-summary B 改: 4 張直卡、無跑道、縮矮、各自輪播) =================
+  var TS = { BX: 80, BY: 110, BW: 1120, BH: 500, CW: 244, CH: 310, CY: 180 };
+  var TS_TEXT = [['*刷關卡*'], ['*刷越快*,', '素材累積越快'], ['素材可解鎖', '*修復工程*、', '解鎖*新關卡*'], ['有空也多去', '*升級所*和*商店*', '看看吧!']];
+  function tsRich(ctx, line, cx, y, px) { // *xx* = 螢光筆金色關鍵詞
+    var parts = String(line).split('*'), total = 0, ws = [], i;
+    for (i = 0; i < parts.length; i++) { ws.push(parts[i] ? tw(ctx, parts[i], px, true) : 0); total += ws[i]; }
+    var x = cx - total / 2;
+    for (i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      if (i % 2 === 1) { rr(ctx, x - 3, y - px * 0.1, ws[i] + 6, px * 0.55, 3); ctx.fillStyle = 'rgba(255,216,74,0.8)'; ctx.fill(); }
+      text(ctx, parts[i], x, y, px, K.ink, 'left', true);
+      x += ws[i];
+    }
+  }
+  function tsPin(ctx, n, x, y, r) {
+    circle(ctx, x + 1, y + 2, r); ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fill();
+    circle(ctx, x, y, r); ctx.fillStyle = K.select; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = K.edge; ctx.stroke();
+    circle(ctx, x - r * 0.3, y - r * 0.35, r * 0.28); ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fill();
+    text(ctx, String(n), x, y + 1, r * 1.15, K.ink, 'center', true);
+  }
+  function tsGround(ctx, c0, c1, top, theme) {
+    for (var c = c0; c <= c1; c++) {
+      drawGround(ctx, { x: c * 40 + 20, y: top + 20, theme: theme, open: { n: true, e: c === c1, s: false, w: c === c0 } });
+      drawGround(ctx, { x: c * 40 + 20, y: top + 60, theme: theme, open: { n: false, e: c === c1, s: false, w: c === c0 } });
+    }
+  }
+  function tsArc(x0, y0, x1, y1, lift, q) { var mx = (x0 + x1) / 2, my = Math.min(y0, y1) - lift, u = 1 - q; return [u * u * x0 + 2 * u * q * mx + q * q * x1, u * u * y0 + 2 * u * q * my + q * q * y1]; }
+  function tsFade(ctx, u, w, h) { var a = u < 0.04 ? 1 - u / 0.04 : (u > 0.96 ? (u - 0.96) / 0.04 : 0); if (a > 0) { ctx.fillStyle = 'rgba(10,8,6,' + (0.85 * a).toFixed(3) + ')'; ctx.fillRect(0, 0, w, h); } }
+  function tsThumb(ctx, x, y, p, theme) { // 卡片縮圖裡的回放(背景 + 地面 + 主角記號)
+    ctx.save(); ctx.beginPath(); ctx.rect(x + 8, y + 8, 160, 90); ctx.clip();
+    ctx.translate(x + 8, y + 8); ctx.scale(0.125, 0.125);
+    drawBackground(ctx, { theme: theme, t: 0 });
+    var th = THEMES[theme] || THEMES.forest;
+    ctx.fillStyle = th.inner; ctx.fillRect(0, 600, 1280, 120); ctx.fillStyle = th.cap; ctx.fillRect(0, 600, 1280, 24);
+    if (p !== null) drawPlayer(ctx, { x: 90 + 1100 * p, y: 582, cls: 'sword', facing: 1, pose: 'run', poseT: p * 3 });
+    ctx.restore();
+  }
+  // 小圖(各自 3 秒一圈); 世界視窗 VW×VH 縮進 222×124
+  var TS_VIEW = [[640, 360], [330, 184], [330, 184], [420, 235]];
+  function tsMini0(ctx, lt) { // 刷關卡: 角色從左跑到終點旗、旗子揮動
+    var u = fr(lt / 3), i;
+    drawBackground(ctx, { theme: 'forest', t: 0 });
+    tsGround(ctx, 0, 15, 300, 'forest');
+    var run = clamp(u / 0.62, 0, 1), px = 50 + 500 * run, h = 0, pose = 'run', pt = lt;
+    if (px > 300 && px < 400) { var jq = (px - 300) / 100; h = 70 * Math.sin(Math.PI * jq); pose = jq < 0.5 ? 'rise' : 'fall'; }
+    var arrive = u >= 0.62, cT = arrive ? (u - 0.62) * 3 : 1.4;
+    if (arrive) { pose = 'cheer'; pt = clamp(cT, 0, 1.4); }
+    drawGoal(ctx, { x: 580, y: 260, reached: arrive, cheerT: arrive ? clamp(cT, 0, 1.4) : 1.4, cheerDur: 1.4 });
+    var pk = [[170, 'wood'], [250, 'stone'], [470, 'crystal']];
+    for (i = 0; i < pk.length; i++) if (px < pk[i][0]) drawPickup(ctx, { x: pk[i][0], y: 284, kind: pk[i][1], t: lt });
+    drawBoar(ctx, { x: 350, y: 284, facing: -1, state: 'walk', t: lt });
+    drawPlayer(ctx, { x: px, y: 282 - h, cls: 'sword', facing: 1, pose: pose, poseT: pt });
+    tsFade(ctx, u, 640, 360);
+  }
+  function tsMini1(ctx, lt) { // 刷越快, 素材累積越快: 已過關卡片重演, 素材一顆顆彈出投進資訊列格, 數字往上跳
+    var u = fr(lt / 3), cyc = Math.floor(lt / 3), i;
+    ctx.fillStyle = lin(ctx, 0, 0, 0, 184, [0, '#1d3036', 1, '#14222a']); ctx.fillRect(0, 0, 330, 184);
+    ctx.strokeStyle = 'rgba(80,120,130,0.18)'; ctx.lineWidth = 1; for (i = 0; i < 9; i++) { ctx.beginPath(); ctx.moveTo(i * 40, 0); ctx.lineTo(i * 40, 184); ctx.stroke(); }
+    var cx = 14, cy = 40, marks = [0.2, 0.45, 0.7], landed = 0, bump = 1;
+    drawLevelCard(ctx, { x: cx, y: cy, index: 1, name: '翠林入口', theme: 'forest', state: 'cleared', recordCls: 'sword', recordTime: 18.4, rates: { wood: 9.8, stone: 3.3, crystal: 0, core: 0 }, devices: [null, null], repairedCount: 3, siteCount: 3 });
+    tsThumb(ctx, cx, cy, u, 'forest');
+    drawCardOverlay(ctx, { x: cx, y: cy, speedMul: 1, newArea: false, selected: false, replayP: u, marks: [{ p: marks[0], kind: 'wood' }, { p: marks[1], kind: 'wood' }, { p: marks[2], kind: 'wood' }], regions: [] });
+    var fl = [];
+    for (i = 0; i < marks.length; i++) { var since = (u - marks[i]) * 3; if (since >= 0.6) { landed++; bump = Math.min(bump, since - 0.6); } else if (since >= 0) fl.push([cx + 8 + 160 * marks[i], since / 0.6]); }
+    // 小資訊列格(同 drawHud 的木材格長相)
+    var sx = 206, sy = 12, sq = bump < 0.2 ? 1 - 0.15 * Math.sin(Math.PI * bump / 0.2) : 1;
+    ctx.save(); ctx.translate(sx + 55, sy + 20); ctx.scale(1, sq); ctx.translate(-sx - 55, -sy - 20);
+    rr(ctx, sx, sy, 110, 40, 6); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.stroke();
+    matIcon(ctx, 'wood', sx + 22, sy + 20, 26);
+    var nb = bump < 0.2 ? 1 + 0.3 * Math.sin(Math.PI * bump / 0.2) : 1;
+    ctx.save(); ctx.translate(sx + 44, sy + 21); ctx.scale(nb, nb); text(ctx, String(12 + cyc * 3 % 60 + landed), 0, 0, 22, K.ink, 'left', true); ctx.restore();
+    ctx.restore();
+    for (i = 0; i < fl.length; i++) { var p = tsArc(fl[i][0], cy + 80, sx + 22, sy + 20, 50, eOut(fl[i][1])); drawFlyingMaterial(ctx, { x: p[0], y: p[1], kind: 'wood', t: fl[i][1] * 0.6, dur: 0.6 }); }
+  }
+  function tsMini2(ctx, lt) { // 前半: 斷橋鋪好、迷霧推開; 後半: 上鎖的關卡卡片鎖彈開、變成已開放
+    var u = fr(lt / 3) * 3, i;
+    if (u < 1.5) {
+      drawBackground(ctx, { theme: 'forest', t: 0 });
+      tsGround(ctx, 0, 2, 120, 'forest'); tsGround(ctx, 5, 8, 120, 'forest');
+      var rep = u >= 0.25, bT = clamp(u - 0.25, 0, 0.6);
+      for (i = 0; i < 2; i++) drawWorksite(ctx, { x: 140 + i * 40, y: 140, kind: 'bridge', role: 'shortcut', repaired: rep, theme: 'forest', end: true, bottom: false, buildT: rep ? bT : 0.6, buildDur: 0.6, order: 0 });
+      drawPickup(ctx, { x: 260, y: 106, kind: 'crystal', t: lt }); drawPickup(ctx, { x: 296, y: 106, kind: 'wood', t: lt + 0.4 });
+      drawFog(ctx, { x: 200, y: 0, w: 130, h: 120, t: lt, theme: 'forest', clearP: sm(seg(u, 0.6, 1.3)), ox: 180, oy: 120, maxR: 230 });
+      if (u < 0.95) drawSiteSign(ctx, { x: 96, y: 96, role: 'shortcut', num: 1 });
+      tsFade(ctx, u / 1.5, 330, 184);
+    } else {
+      var v = u - 1.5;
+      ctx.fillStyle = lin(ctx, 0, 0, 0, 184, [0, '#1d3036', 1, '#14222a']); ctx.fillRect(0, 0, 330, 184);
+      var open = v >= 0.5, shake = (v > 0.3 && v < 0.5) ? Math.sin(v * 90) * 3 : 0, cx = 77 + shake, cy = 24;
+      drawLevelCard(ctx, { x: cx, y: cy, index: 2, name: '藤蔓小徑', theme: 'forest', state: open ? 'open' : 'buyable', cost: { wood: 50, stone: 0, crystal: 0, core: 0 }, stock: { wood: 80, stone: 0, crystal: 0, core: 0 }, devices: open ? [null, null] : null, repairedCount: 0, siteCount: 3 });
+      if (open) {
+        tsThumb(ctx, cx, cy, null, 'forest');
+        var fq = seg(v, 0.5, 0.85); if (fq < 1) { rr(ctx, cx, cy, 176, 136, 8); ctx.fillStyle = 'rgba(255,248,220,' + (0.85 * (1 - fq)).toFixed(3) + ')'; ctx.fill(); }
+        var lq = seg(v, 0.5, 1.0); if (lq < 1) { ctx.save(); ctx.globalAlpha *= 1 - lq; lockIcon(ctx, cx + 88, cy + 38 - 50 * eOut(lq), 30 * (1 + 0.5 * lq), K.select); ctx.restore(); }
+        var bq = seg(v, 0.5, 0.95); if (bq > 0 && bq < 1) { ctx.save(); ctx.globalAlpha *= 1 - bq; ctx.fillStyle = K.select; for (i = 0; i < 8; i++) { var a = i * TAU / 8, d = 60 + 30 * eOut(bq); star4(ctx, cx + 88 + Math.cos(a) * d, cy + 68 + Math.sin(a) * d * 0.6, 7); ctx.fill(); } ctx.restore(); }
+      }
+      tsFade(ctx, v / 1.5, 330, 184);
+    }
+  }
+  function tsMini3(ctx, lt) { // 升級所卡與商店卡並排、輪流亮起金色選取框
+    var u = fr(lt / 3) * 3, i;
+    ctx.fillStyle = lin(ctx, 0, 0, 0, 235, [0, '#3e3227', 1, '#2e251c']); ctx.fillRect(0, 0, 420, 235);
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 2; for (i = 0; i < 5; i++) { ctx.beginPath(); ctx.moveTo(0, 50 * i + 20); ctx.lineTo(420, 50 * i + 20); ctx.stroke(); }
+    var wsSel = u < 1.5;
+    drawWorkshopCard(ctx, { x: 24, y: 50, anyAffordable: true, allDone: false, selected: wsSel });
+    drawShopCard(ctx, { x: 220, y: 50, anyAffordable: true, soldOut: false, selected: !wsSel });
+  }
+  var TS_MINI = [tsMini0, tsMini1, tsMini2, tsMini3];
+  function tsMiniBox(ctx, i, x, y, lt) {
+    var w = 222, h = 124, v = TS_VIEW[i];
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    ctx.fillStyle = '#10141c'; ctx.fillRect(x, y, w, h);
+    ctx.translate(x, y); ctx.scale(w / v[0], h / v[1]);
+    TS_MINI[i](ctx, Math.max(0, lt));
+    ctx.restore();
+    ctx.save();
+    ctx.lineWidth = 3; ctx.strokeStyle = K.edge; ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,215,160,0.4)'; ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
+    ctx.restore();
+  }
+  function tsCard(ctx, i, x, y, lt) {
+    var CW = TS.CW, CH = TS.CH;
+    rr(ctx, x + 2, y + 4, CW, CH, 7); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill();
+    rr(ctx, x, y, CW, CH, 7); ctx.fillStyle = K.parch; ctx.fill();
+    ctx.fillStyle = 'rgba(120,90,40,0.12)'; ctx.fillRect(x + 3, y + CH - 6, CW - 6, 3);
+    if (i === 3) { ctx.save(); ctx.setLineDash([8, 5]); rr(ctx, x + 3, y + 3, CW - 6, CH - 6, 5); ctx.lineWidth = 2; ctx.strokeStyle = K.inkDim; ctx.stroke(); ctx.restore(); } // 第 4 張 = 旁註
+    rr(ctx, x + 0.5, y + 0.5, CW - 1, CH - 1, 7); ctx.lineWidth = 1.5; ctx.strokeStyle = K.edge; ctx.stroke();
+    tsMiniBox(ctx, i, x + 11, y + 34, lt);
+    tsPin(ctx, i + 1, x + CW / 2, y + 4, 17);
+    var lines = TS_TEXT[i];
+    for (var j = 0; j < lines.length; j++) tsRich(ctx, lines[j], x + CW / 2, y + 218 + j * 36, 22);
+  }
+  function drawTutSummary(ctx, st) {
+    st = obj(st);
+    var openT = clamp(num(st.openT, 0), 0, 1e6), closing = st.closing === true, closeQ = closing ? clamp(num(st.closeT, 0), 0, 0.3) / 0.3 : 0;
+    var canClose = st.canClose === true, t = num(st.t, 0), i;
+    var BX = TS.BX, BY = TS.BY, BW = TS.BW, BH = TS.BH, CW = TS.CW, CH = TS.CH, CY = TS.CY;
+    ctx.save();
+    // 全畫面半透明暗幕(大地圖在背後保留可見)
+    ctx.fillStyle = 'rgba(8,6,4,' + (0.62 * seg(openT, 0, 0.3) * (1 - closeQ)).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H);
+    if (closing) { var sc = 1 - 0.1 * closeQ; ctx.translate(640, 360); ctx.scale(sc, sc); ctx.translate(-640, -360); ctx.globalAlpha *= 1 - closeQ; }
+    var bq = seg(openT, 0, 0.5);
+    ctx.translate(0, -(BY + BH + 10) * (1 - eBack(bq)));
+    board(ctx, BX, BY, BW, BH);
+    text(ctx, '新手教學總結', 640, 150, 32, K.cream, 'center', true, 6, K.edge);
+    ctx.fillStyle = K.select; ctx.fillRect(640 - 120, 172, 240, 3);
+    for (i = 0; i < 4; i++) { // 第 i 張在 0.7 + 0.45i 起從右側滑入 0.55 秒, 回彈落定 + 卡底揚塵; 落定後小圖開始輪播(起點錯開 0.75 秒)
+      var T0 = 0.7 + 0.45 * i, q = seg(openT, T0, T0 + 0.55);
+      if (q <= 0) continue;
+      var x = 110 + 272 * i, dx = (1 - eBack(q)) * (1300 - x), tilt = (1 - eOut(q)) * 0.12;
+      var lt = Math.max(0, openT - (T0 + 0.55)) + 0.75 * i;
+      ctx.save();
+      ctx.translate(x + dx + CW / 2, CY + CH); ctx.rotate(tilt); ctx.translate(-x - CW / 2, -CY - CH);
+      tsCard(ctx, i, x, CY, lt);
+      ctx.restore();
+      var dq = seg(openT, T0 + 0.41, T0 + 0.76);
+      if (dq > 0 && dq < 1) {
+        ctx.save(); ctx.globalAlpha *= 0.7 * (1 - dq); ctx.fillStyle = '#d8c7a4';
+        for (var k = 0; k < 3; k++) { circle(ctx, x - 4 - dq * 14 - k * 6, CY + CH - 4 - k * 5 * dq, 5 + dq * 4 - k); ctx.fill(); circle(ctx, x + CW + 4 + dq * 14 + k * 6, CY + CH - 4 - k * 5 * dq, 5 + dq * 4 - k); ctx.fill(); }
+        ctx.restore();
+      }
+    }
+    if (canClose && openT >= 2.9) { // 板底「按 [Z] 關閉」, 按鍵輕輕上下彈
+      ctx.save(); ctx.globalAlpha *= seg(openT, 2.9, 3.2);
+      kline(ctx, ['按', { key: 'z', st: 'hot' }, '關閉'], 640, 570, 22, 'center', 'board', Math.sin(t * TAU / 0.8) * 2);
+      ctx.restore();
+    }
     ctx.restore();
   }
 
@@ -2235,17 +2893,19 @@
     rr(ctx, x + 6, y + 106, 164, 28, 4); ctx.fillStyle = state === 'sealed' ? K.parchDim : K.parch; ctx.fill();
     var inkN = state === 'sealed' ? '#5e5240' : K.ink;
     var hasDev = live && Array.isArray(st.devices);
-    // 文字右界: 有裝置格時 x+120(裝置格佔 x+123~167、y+108~132 兩行高), 沒有時 x+168
-    var tR = hasDev ? 120 : 168, nmMax = state === 'cleared' ? tR - 62 : tR - 11;
-    fitText(ctx, idx + ' ' + name, x + 11, y + 113.5, 12, inkN, nmMax);
-    if (state === 'cleared') { // 第一行: 名稱 + 職業小圖示 + 秒數; 第二行: 四種產量壓在 x+8 ~ x+118
-      var nw = Math.min(nmMax, tw(ctx, idx + ' ' + name, 12, true));
-      if (st.recordCls != null) clsIcon(ctx, st.recordCls, x + 18 + nw, y + 113.5, 12);
-      if (st.recordTime != null) fitText(ctx, fmt1(st.recordTime) + 's', x + 26 + nw, y + 114, 11, K.ink, Math.max(10, tR - 26 - nw));
-      var rt = mats(st.rates);
-      for (var i = 0; i < 4; i++) { var k = KINDS[i]; matIcon(ctx, k, x + 12 + i * 27, y + 126.5, 8, true); fitText(ctx, fmt1(clamp(rt[k], 0, 9999)), x + 17 + i * 27, y + 127, 10, K.ink, 18); }
+    // polish 第 5 輪: 通關秒數固定右對齊(右緣卡片內 x 168、中心 y 114, 新手教學箭頭指它), 名稱不推動它。
+    // 裝置格因此左移到卡片內 (97,108)、(119,108)(介面原寫 (123,108)/(146,108), 會和秒數重疊; 見 style.md 判讀約定 25)
+    // 版面: 第一行 名稱 x+11~x+94 | 裝置格 x+97~x+140(兩行高) | 秒數 x+143~x+168; 第二行 四種產量 x+8~x+94 | 職業小圖示在秒數正下方
+    var tR = hasDev ? 94 : 168, nmMax = tR - 11;
+    var secR = 168, secMax = hasDev ? 25 : 60;
+    fitText(ctx, idx + ' ' + name, x + 11, y + 113.5, 12, inkN, state === 'cleared' && !hasDev ? Math.max(20, nmMax - secMax - 4) : nmMax);
+    if (state === 'cleared') {
+      if (st.recordTime != null) fitText(ctx, fmt1(st.recordTime) + 's', x + secR, y + 114, 11, K.ink, secMax, 'right');
+      if (st.recordCls != null) clsIcon(ctx, st.recordCls, x + 156, y + 127, 12);
+      var rt = mats(st.rates), stp = hasDev ? 21.5 : 27;
+      for (var i = 0; i < 4; i++) { var k = KINDS[i]; matIcon(ctx, k, x + 12 + i * stp, y + 126.5, 8, true); fitText(ctx, fmt1(clamp(rt[k], 0, 9999)), x + 17 + i * stp, y + 127, 10, K.ink, stp - 9.5); }
     } else if (state === 'open') text(ctx, '未過關', x + 11, y + 127, 11, K.inkDim, 'left', true);
-    else if (state === 'buyable') text(ctx, '可解鎖 · Z', x + 11, y + 127, 11, K.selectDeep, 'left', true);
+    else if (state === 'buyable') kline(ctx, [{ t: '可解鎖 ·', col: K.selectDeep }, { key: 'z' }], x + 11, y + 127, 11, 'left', 'parch');
     else text(ctx, boss ? '7 關全過才開放' : '前一關未過', x + 11, y + 127, 11, '#5e5240', 'left', true);
     if (hasDev) devSockets(ctx, x, y, st.devices);
     if (state === 'sealed') { rr(ctx, x, y, 176, 136, 8); ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fill(); }
@@ -2258,10 +2918,10 @@
     if (w <= maxW || w <= 0) { text(ctx, s, x, y, px, col, align || 'left', true); return; }
     ctx.save(); ctx.translate(x, y); ctx.scale(maxW / w, 1); text(ctx, s, 0, 0, px, col, align || 'left', true); ctx.restore();
   }
-  // 卡片裝置格: 卡片內 (123,108) 與 (146,108) 各 21×24; null = 深色凹槽 + 虛線框 + 淡色「+」, 有值 = 較亮凹槽 + 裝置小圖示(邊長 17)
+  // 卡片裝置格: 卡片內 (97,108) 與 (119,108) 各 21×24(polish 第 5 輪讓位給右對齊的秒數); null = 深色凹槽 + 虛線框 + 淡色「+」, 有值 = 較亮凹槽 + 裝置小圖示(邊長 17)
   function devSockets(ctx, x, y, devs) {
     for (var j = 0; j < 2; j++) {
-      var d = ITEMS.indexOf(devs[j]) >= 0 ? devs[j] : null, sx = x + 123 + j * 23, sy = y + 108, w = 21, h = 24;
+      var d = ITEMS.indexOf(devs[j]) >= 0 ? devs[j] : null, sx = x + 97 + j * 22, sy = y + 108, w = 21, h = 24;
       rr(ctx, sx, sy, w, h, 3); ctx.fillStyle = d ? '#5a4f44' : '#3a3632'; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = K.edge; ctx.stroke();
       ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(sx + 1.5, sy + 1.5, w - 3, 2);
@@ -2448,7 +3108,7 @@
       text(ctx, '已完工', 0, 0.5, 14, K.good, 'center', true); ctx.restore();
     } else {
       var c = costLine(ctx, s.cost, stock, mid, ty + 96, 13, 'center');
-      act(ctx, 'Z 修復', mid, ty + 117, c.ok ? (sel && rowOn ? 'hot' : 'idle') : 'off', 'center', 11);
+      actKey(ctx, 'z', '修復', mid, ty + 116, c.ok ? (sel && rowOn ? 'hot' : 'idle') : 'off', 'center', 11);
     }
   }
   function drawLevelPanel(ctx, st) {
@@ -2503,7 +3163,8 @@
       }
       if (sel) {
         var empty = storeCount <= 0 && !has; // 倉庫沒有裝置且這一格是空的: 按 Z 不反應
-        text(ctx, empty ? '倉庫沒有裝置' : 'Z 打開裝置倉庫', ox + 222, y2 + 12, 11, empty ? K.short : K.ink, 'right', true);
+        if (empty) text(ctx, '倉庫沒有裝置', ox + 222, y2 + 13, 11, K.short, 'right', true);
+        else kline(ctx, [{ key: 'z' }, '打開裝置倉庫'], ox + 222, y2 + 13, 11, 'right', 'parch');
       }
     }
     // 開始挑戰列 (720,416) 480×170, 大石鍵置中
@@ -2512,7 +3173,7 @@
     rr(ctx, 817, gy + 59, 300, 64, 10); ctx.fillStyle = '#8f8471'; ctx.fill();
     rr(ctx, 817, gy + 53, 300, 64, 10); ctx.fillStyle = row === 2 ? K.select : '#ece4d2'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.stroke();
     text(ctx, '開始挑戰', 927, gy + 86, 28, K.ink, 'center', true);
-    keycap(ctx, 'Z', 1067, gy + 85, 22, row === 2);
+    keycap(ctx, 'z', 1067, gy + 85, 22, 'normal'); // 金色石鍵上用深墨按鍵(金面會和鈕融在一起)
     keyRow(ctx, [['↑↓', '換列'], ['←→', '選擇'], ['Z', '確定'], ['X', '關閉']], 60, 674, 13, 'left');
     ctx.restore();
   }
@@ -2617,7 +3278,7 @@
       text(ctx, ITEM_NAME[se.type], 700, dy + 22, 20, K.ink, 'left', true);
       text(ctx, ITEM_CAT[se.type], 992, dy + 22, 12, K.inkDim, 'right', true);
       fitText(ctx, ITEM_FX[se.type], 700, dy + 50, 14, K.ink, 292);
-      text(ctx, '倉庫裡 ' + se.n + ' 座 · Z 安裝到 ' + slotNo + ' 號格', 700, dy + 74, 12, K.inkDim, 'left', true);
+      kline(ctx, ['倉庫裡 ' + se.n + ' 座 · ', { key: 'z' }, '安裝到 ' + slotNo + ' 號格'], 700, dy + 74, 12, 'left', 'parch');
     }
     keyRow(ctx, [['↑↓', '選擇'], ['Z', '安裝'], ['X', '返回']], 684, 568, 13, 'left');
     ctx.restore();
@@ -2673,7 +3334,7 @@
       text(ctx, '特性: ' + CLS_TRAIT[cls], x + 100, ty + 158, 13, K.inkDim, 'center', true);
       text(ctx, '技能: ' + CLS_SKILL[cls], x + 100, ty + 178, 13, K.inkDim, 'center', true);
       if (!owned) text(ctx, '到升級所解鎖', x + 100, ty + 202, 13, '#8a3a1a', 'center', true);
-      else if (isSel) act(ctx, 'Z 出發', x + 100, ty + 202, 'hot', 'center', 14);
+      else if (isSel) actKey(ctx, 'z', '出發', x + 100, ty + 201, 'hot', 'center', 13);
     }
     keyRow(ctx, [['←→', '選擇'], ['Z', '出發'], ['X', '返回']], 316, 498, 13, 'left');
     ctx.restore();
@@ -2740,7 +3401,7 @@
       text(ctx, '特性: ' + CLS_TRAIT[cls], x + 104, ty + 50, 13, K.inkDim, 'left', true);
       text(ctx, '技能: ' + CLS_SKILL[cls], x + 104, ty + 70, 13, K.inkDim, 'left', true);
       if (owned) { if (!fxHere) unlockedStamp(ctx, x + 440, ty + 58, 1, 1); }
-      else { var c = costLine(ctx, rc.cost, stock, x + 104, ty + 96, 15, 'left'); act(ctx, 'Z 解鎖', x + 514, ty + 96, c.ok ? (isSel && row === 0 ? 'hot' : 'idle') : 'off', 'right', 13); }
+      else { var c = costLine(ctx, rc.cost, stock, x + 104, ty + 96, 15, 'left'); actKey(ctx, 'z', '解鎖', x + 514, ty + 96, c.ok ? (isSel && row === 0 ? 'hot' : 'idle') : 'off', 'right', 13); }
     }
     for (i = 0; i < 4; i++) {
       var s = obj(stats[i]), key = oneOf(s.key, STAT_KEYS, STAT_KEYS[i]), maxLv = Math.round(clamp(num(s.maxLv, STAT_FX[key].length - 1), 1, 9)), lv = Math.round(clamp(num(s.lv, 0), 0, maxLv));
@@ -2753,7 +3414,7 @@
       text(ctx, cur, 360, ty2 + 32, 17, K.ink, 'left', true);
       if (!full) { var cw = tw(ctx, cur, 17, true); text(ctx, '→  ' + (sfx[lv + 1] || ''), 372 + cw, ty2 + 32, 17, K.good, 'left', true); }
       if (full) { ctx.save(); ctx.translate(1110, ty2 + 32); ctx.rotate(-0.08); rr(ctx, -44, -14, 88, 28, 4); ctx.lineWidth = 2.5; ctx.strokeStyle = K.inkDim; ctx.stroke(); text(ctx, '已滿', 0, 0.5, 16, K.inkDim, 'center', true); ctx.restore(); }
-      else { var cc = costLine(ctx, s.cost, stock, 760, ty2 + 32, 16, 'left'); act(ctx, 'Z 強化', 1172, ty2 + 32, cc.ok ? (on ? 'hot' : 'idle') : 'off', 'right', 14); }
+      else { var cc = costLine(ctx, s.cost, stock, 760, ty2 + 32, 16, 'left'); actKey(ctx, 'z', '強化', 1172, ty2 + 32, cc.ok ? (on ? 'hot' : 'idle') : 'off', 'right', 14); }
     }
     keyRow(ctx, [['↑↓', '換列'], ['←→', '選擇'], ['Z', '解鎖 / 強化'], ['X', '關閉']], 60, 674, 13, 'left');
     if (fx) unlockFx(ctx, fx, us);
@@ -2922,10 +3583,7 @@
     }
     if (cmp) keyRow(ctx, [['Z', '採用這一趟', true], ['X', '保留舊的']], 640, 548, 15, 'center');
     else {
-      var lw = tw(ctx, '已存成回放', 15, true) + 24;
-      keyRow(ctx, [['Z', '回大地圖', true]], 640 + lw / 2, 548, 15, 'center');
-      var kw = keyW(ctx, 'Z', 15) + 5 + tw(ctx, '回大地圖', 15, true);
-      text(ctx, '已存成回放', 640 + lw / 2 - kw / 2 - 24, 548.5, 15, K.goodLight, 'right', true, 3, K.edge);
+      kline(ctx, [{ t: '已存成回放    ', col: K.goodLight }, { key: 'z', st: 'hot' }, '回大地圖'], 640, 548, 15, 'center', 'board');
     }
     ctx.restore();
   }
@@ -3350,7 +4008,7 @@
       mat: function (ctx, kind, cx, cy, size) { ctx.save(); matIcon(ctx, kind, cx, cy, size); ctx.restore(); },
       item: function (ctx, type, cx, cy, size) { ctx.save(); itemIcon(ctx, type, cx, cy, size); ctx.restore(); },
       cls: function (ctx, cls, cx, cy, size) { ctx.save(); clsIcon(ctx, cls, cx, cy, size); ctx.restore(); },
-      key: function (ctx, label, cx, cy, px, hot) { ctx.save(); var w = keycap(ctx, label, cx, cy, px, hot); ctx.restore(); return w; }
+      key: function (ctx, label, cx, cy, px, hot) { ctx.save(); var w = keycap(ctx, label, cx, cy, px, hot === true || hot === 'hot' ? 'hot' : (hot === 'done' || hot === 'press' ? hot : 'normal')); ctx.restore(); return w; }
     },
     drawTitle: drawTitle,
     drawBackground: drawBackground,
@@ -3401,6 +4059,10 @@
     drawHud: drawHud,
     drawSoundIcon: drawSoundIcon,
     drawTutorial: drawTutorial,
+    drawCtrlPanel: drawCtrlPanel,
+    drawRespawnFx: drawRespawnFx,
+    drawTutSummary: drawTutSummary,
+    drawKeyLine: drawKeyLine,
     drawMapLink: drawMapLink,
     drawLevelCard: drawLevelCard,
     drawCardOverlay: drawCardOverlay,

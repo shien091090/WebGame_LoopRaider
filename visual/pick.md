@@ -19,3 +19,10 @@ unlock-fx: B
 map-card: B
 devices: C
 map-layout: B, 商店入口跟升級所一樣只放簡單圖示, 不顯示剩餘商品或其他細節; 商店全部售完時掛大標籤「已售完」; 升級所在全職業解鎖且所有升級都升完時掛大標籤「全解鎖」
+tut-text: B
+keycap: B
+ctrl-panel: A, 但卷軸攤開時要像方案 C 那樣逐組點亮按鍵, 每組點亮時角色同步做一次那個動作(←→ 移動、↑ 跳、Z 攻擊、X 技能各示範一次)
+tut-spotlight: B
+respawn: C
+tut-summary: B, 只保留 4 個說明區塊, 拿掉下方的循環箭頭, 整體面板縮矮一點; 面板放著不按關閉時, 4 個說明區塊各自輪播小動畫
+tut-arrow: B

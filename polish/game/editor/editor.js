@@ -742,9 +742,10 @@
   }
   // 回傳 Promise<'file' | 'download' | false>
   function save(forcePick) {
-    if (!confirmProblems()) return Promise.resolve(false);
+    // 先拿檔案(存檔視窗 / 要求權限都需要「剛點過按鈕」的使用者手勢), 拿到後才跳嚴重問題確認;
+    // 先跳 confirm 會用掉手勢, 之後存檔視窗開不出來, 按確定後就沒反應
     var text = textOut();
-    if (!W.showSaveFilePicker) { download(text); return Promise.resolve('download'); }
+    if (!W.showSaveFilePicker) { if (!confirmProblems()) return Promise.resolve(false); download(text); return Promise.resolve('download'); }
     var h = forcePick ? null : fileHandle;
     var getH = h ? Promise.resolve(h) : (forcePick ? Promise.resolve(null) : idbGet('levels').catch(function () { return null; }));
     return getH.then(function (hh) {
@@ -756,6 +757,8 @@
       toast('請在存檔視窗裡找到 <b>polish\\game\\game\\levels.js</b>, 選它並按「取代」。', 8000);
       return W.showSaveFilePicker({ suggestedName: 'levels.js', types: [{ description: 'levels.js 關卡資料', accept: { 'text/javascript': ['.js'] } }] });
     }).then(function (hh) {
+      if (!hh) return false;
+      if (!confirmProblems()) { toast('取消存檔'); return false; }
       if (hh.name !== 'levels.js' && !W.confirm('你選的檔案叫「' + hh.name + '」, 不是 levels.js, 遊戲不會讀它。還是要存嗎?')) return false;
       return hh.createWritable().then(function (w) { return w.write(text).then(function () { return w.close(); }); }).then(function () {
         fileHandle = hh; idbSet('levels', hh).catch(function () { });

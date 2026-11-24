@@ -2473,6 +2473,22 @@
       ctx.beginPath(); ctx.rect(-60, -60, W + 120, H + 120); rrPath(ctx, r[0] - e, r[1] - e, r[2] + 2 * e, r[3] + 2 * e, Math.max(2, e + 2)); ctx.clip('evenodd');
     }
   }
+  var SPOT_CACHE = {}, SPOT_CACHE_N = 0;
+  function spotLayer(ctx, all, br, kk) { // 暗幕(柔邊多層)+ 光緣細線外暈
+    var LAYERS = 7, STEP = 7, DIM = 0.72 * kk, LA = 1 - Math.pow(1 - DIM, 1 / LAYERS), i;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 40, W, H - 40); ctx.clip(); // 暗幕只蓋 y 40~720(不蓋資訊列)
+    for (var L = 0; L < LAYERS; L++) { // 柔邊: 每層挖的洞比前一層大 7px, 越外越暗(約 49px 漸到 72%)
+      ctx.save(); spotClipOut(ctx, all, br + L * STEP);
+      ctx.fillStyle = 'rgba(6,7,16,' + LA.toFixed(4) + ')'; ctx.fillRect(0, 40, W, H - 40);
+      ctx.restore();
+    }
+    ctx.save(); ctx.globalAlpha *= kk; spotClipOut(ctx, all, br);
+    ctx.shadowColor = 'rgba(255,226,150,0.95)'; ctx.shadowBlur = 12; ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,236,180,0.9)';
+    for (i = 0; i < all.length; i++) { var g = all[i], e = br + 1.25; ctx.beginPath(); rrPath(ctx, g[0] - e, g[1] - e, g[2] + 2 * e, g[3] + 2 * e, Math.max(2, e + 2)); ctx.stroke(); }
+    ctx.restore();
+    ctx.restore();
+  }
   function tutSpot(ctx, spot, t) {
     var kk = clamp(num(spot.k, 1), 0, 1), holes = arr(spot.holes).slice(0, 3), all = [], hs = [], i, j;
     if (kk <= 0.001) return;
@@ -2484,15 +2500,18 @@
       for (j = 0; j < ok.length; j++) { x0 = Math.min(x0, ok[j][0]); y0 = Math.min(y0, ok[j][1]); x1 = Math.max(x1, ok[j][0] + ok[j][2]); y1 = Math.max(y1, ok[j][1] + ok[j][3]); }
       hs.push({ rects: ok, cx: num(h.cx, (x0 + x1) / 2), cy: num(h.cy, (y0 + y1) / 2), x0: x0, y0: y0, x1: x1, y1: y1 });
     }
-    var p = fr(t / 2.4), br = 16 + 3 * Math.sin(p * TAU); // 光洞外擴 ~16, 2.4 秒呼吸一圈
-    var LAYERS = 7, STEP = 7, DIM = 0.72 * kk, LA = 1 - Math.pow(1 - DIM, 1 / LAYERS);
+    var p = fr(t / 2.4), br = Math.round(16 + 3 * Math.sin(p * TAU)); // 光洞外擴 ~16, 2.4 秒呼吸一圈(取整數 px 以便快取)
     ctx.save();
-    ctx.beginPath(); ctx.rect(0, 40, W, H - 40); ctx.clip(); // 暗幕只蓋 y 40~720(不蓋資訊列)
-    for (var L = 0; L < LAYERS; L++) { // 柔邊: 每層挖的洞比前一層大 7px, 越外越暗(約 49px 漸到 72%)
-      ctx.save(); spotClipOut(ctx, all, br + L * STEP);
-      ctx.fillStyle = 'rgba(6,7,16,' + LA.toFixed(4) + ')'; ctx.fillRect(0, 40, W, H - 40);
-      ctx.restore();
+    // 暗幕 + 光緣很吃效能(多層 evenodd 裁切 + shadowBlur), 依「光洞矩形 + 外擴 + 解析度」快取成離屏圖, 每幀只貼圖; 淡入淡出用 globalAlpha
+    var sc = ctx.getTransform ? ctx.getTransform().a : 1, key = br + '|' + sc.toFixed(3) + '|' + JSON.stringify(all), cv = SPOT_CACHE[key];
+    if (!cv && typeof document !== 'undefined') {
+      if (SPOT_CACHE_N > 12) { SPOT_CACHE = {}; SPOT_CACHE_N = 0; }
+      cv = document.createElement('canvas'); cv.width = Math.ceil(W * sc); cv.height = Math.ceil(H * sc);
+      var oc = cv.getContext('2d'); oc.setTransform(sc, 0, 0, sc, 0, 0); spotLayer(oc, all, br, 1);
+      SPOT_CACHE[key] = cv; SPOT_CACHE_N++;
     }
+    if (cv) { ctx.save(); ctx.globalAlpha *= kk; ctx.drawImage(cv, 0, 0, W, H); ctx.restore(); }
+    else spotLayer(ctx, all, br, kk);
     for (i = 0; i < hs.length; i++) { // 光錐: 從畫面上緣(資訊列下)打到光洞, 錐內塵粒往下飄
       var hh = hs[i], ex = Math.min(170, (hh.x1 - hh.x0) / 2 + br) * 0.92, sx = hh.cx + 30 + 14 * Math.sin(p * TAU + i * 1.7), by = Math.max(60, hh.y0 - br);
       ctx.save(); ctx.globalAlpha *= kk;
@@ -2505,11 +2524,6 @@
       }
       ctx.restore();
     }
-    // 光緣: 聯集外緣一圈暖白細線 + 外暈(就是修復點的邊緣光)
-    ctx.save(); ctx.globalAlpha *= kk; spotClipOut(ctx, all, br);
-    ctx.shadowColor = 'rgba(255,226,150,0.95)'; ctx.shadowBlur = 12; ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,236,180,0.9)';
-    for (i = 0; i < all.length; i++) { var g = all[i], e = br + 1.25; ctx.beginPath(); rrPath(ctx, g[0] - e, g[1] - e, g[2] + 2 * e, g[3] + 2 * e, Math.max(2, e + 2)); ctx.stroke(); }
-    ctx.restore();
     ctx.restore();
   }
 

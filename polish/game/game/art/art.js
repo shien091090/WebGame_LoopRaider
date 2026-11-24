@@ -2269,70 +2269,79 @@
   function vQuad(a, c, b, u) { var v = 1 - u; return V(v * v * a.x + 2 * v * u * c.x + u * u * b.x, v * v * a.y + 2 * v * u * c.y + u * u * b.y); }
   function polyV(ctx, pts) { ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y); }
 
-  // ---------- 大箭頭(tut-arrow B 漫畫貼紙彎箭頭) ----------
-  // 前粗後細的實心緞帶(半寬 7 → 16)+ 帶倒鉤的大箭頭(半寬 40)+ 右下深金厚度 + 粗黑描邊。
-  // 1 秒一圈: 0~0.4 往箭尾方向拉弓退 12px(彎度加大、尾端微抖)→ 0.4~0.5 彈回 → 0.5 起尖端到 (tipX,tipY), 整支沿指向壓扁回彈 + 尖端往箭尾側扇開的衝擊刺。
-  // grow 0~1 = 進場(從箭尾往尖端長出來)。尖端最遠只到 tip(描邊也收在 tip 之內)
-  function tutArrowB(ctx, a, t, grow) {
-    var S0 = V(num(a.tailX, 600), num(a.tailY, 300)), T = V(num(a.tipX, 640), num(a.tipY, 360)), bend = clamp(num(a.bend, 0), -0.45, 0.45);
-    var D0 = vSub(T, S0); if (vLen(D0) < 30) D0 = V(0, 30); // 尖端與箭尾太近時拉開成直的(不拋錯)
-    var dirST = vNorm(D0), S = vAdd(S0, vMul(dirST, 12)); // 箭尾內縮 12: 拉弓退 12、彎曲的尾端角與厚度加起來, 尾端仍在 tail 點外 8px 內
-    var c = fr(t), pull = 0, k = bend, sq = 1, trem = 0, impact = -1, speed = 0;
-    if (c < 0.4) { var p = sm(c / 0.4); pull = 12 * p; k = bend * (1 + 0.35 * p); if (c > 0.28) trem = (c - 0.28) / 0.12; }
-    else if (c < 0.5) { var q = (c - 0.4) / 0.1; pull = 12 * (1 - q * q); k = bend * (1 + 0.35 * (1 - q)); speed = q; }
-    else { var x = c - 0.5, damp = Math.exp(-7 * x) * Math.cos(18 * x); sq = 1 - 0.2 * Math.max(0, damp); k = bend * (1 - 0.15 * damp); /* 只壓扁不拉長: 回彈時箭尾不往後甩 */ impact = x / 0.3; speed = clamp(1 - x / 0.12, 0, 1); }
-    if (grow < 1) { pull = 0; trem = 0; impact = -1; speed = 0; sq = 1; }
-    var D = vSub(T, S), L = vLen(D), n0 = vPerp(vNorm(D));
-    var C = vAdd(vMul(vAdd(S, T), 0.5), vMul(n0, -k * L)); // 正值 = 往「箭尾 → 尖端」方向的左側鼓出(畫布 y 向下, 左側 = −perp)
-    var dh = vNorm(vSub(T, C)), nh = vPerp(dh);
-    var back = vMul(dh, -pull);
-    if (trem > 0) back = vAdd(back, V(Math.sin(t * 157) * 1.5 * trem, Math.cos(t * 131) * 1.5 * trem));
-    var P = vAdd(vSub(T, vMul(dh, 2.5)), back), S2 = vAdd(S, back), C2 = vAdd(C, back); // 尖端內縮 2.5: 粗描邊外緣剛好到 tip
-    var hl = Math.min(56, L * 0.45), B = vSub(P, vMul(dh, hl));
-    var N = 24, left = [], right = [], i;
+  // ---------- 大箭頭(tut-arrow B 漫畫貼紙箭頭; polish 第 6 輪改成單一平順二次貝茲) ----------
+  // 幾何照介面公式: â = (aim − tip) 單位向量; 箭尾 S = 提示板該邊 along 點往板內縮 6px; 底座 B = tip − â·36;
+  // 控制點 C = B − â·(|B − S| / 2)(末端切線 = â, 中段不轉折); 箭頭 = B 兩側各 24px 的倒鉤三角(寬 48), 尖端在 tip。
+  // 箭身半寬沿曲線 5 → 10。外觀: 金色緞帶 + 右下深金厚度 + 粗黑描邊 + 白色高光線。
+  // 1 秒一圈: 0~0.4 拉弓(只有尖端沿 −â 縮回至多 10px, 箭尾不動)→ 0.4~0.5 彈回 → 0.5 起尖端在 tip, 箭頭沿 â 壓扁回彈 + 衝擊刺。
+  // grow 0~1 = 沿曲線從箭尾長到尖端(進場 arrowsT / 收起 outT 共用)。
+  var TA = { HEAD: 36, HW: 24, W0: 5, W1: 10, PULL: 10, INSET: 6, EDGE: 12 };
+  function tutTail(a, R) { // R = 提示板實際矩形 { x, y, w, h }; 回傳箭尾 S(已往板內縮 6px)
+    var side = oneOf(a.side, ['top', 'bottom', 'left', 'right'], 'bottom'), e = TA.EDGE, in6 = TA.INSET;
+    if (side === 'top' || side === 'bottom') {
+      var ax = clamp(num(a.along, R.x + R.w / 2), R.x + e, Math.max(R.x + e, R.x + R.w - e));
+      return { S: V(ax, side === 'top' ? R.y + in6 : R.y + R.h - in6), n: V(0, side === 'top' ? -1 : 1) };
+    }
+    var ay = clamp(num(a.along, R.y + R.h / 2), R.y + e, Math.max(R.y + e, R.y + R.h - e));
+    return { S: V(side === 'left' ? R.x + in6 : R.x + R.w - in6, ay), n: V(side === 'left' ? -1 : 1, 0) };
+  }
+  function tutArrowB(ctx, a, S, t, grow) {
+    var T = V(num(a.tipX, 640), num(a.tipY, 360)), A = V(num(a.aimX, T.x), num(a.aimY, T.y + 1));
+    var dA = vSub(A, T), ah = Math.sqrt(dA.x * dA.x + dA.y * dA.y) > 0.5 ? vNorm(dA) : vNorm(vSub(T, S)); // 瞄準點與尖端重合時退回弦方向
+    var c = fr(t), pull = 0, sq = 1, impact = -1, speed = 0;
+    if (c < 0.4) pull = TA.PULL * sm(c / 0.4);
+    else if (c < 0.5) { var q = (c - 0.4) / 0.1; pull = TA.PULL * (1 - q * q); speed = q; }
+    else { var x = c - 0.5, damp = Math.exp(-7 * x) * Math.cos(18 * x); sq = 1 - 0.22 * Math.max(0, damp); impact = x / 0.3; speed = clamp(1 - x / 0.12, 0, 1); }
+    if (grow < 1) { pull = 0; sq = 1; impact = -1; speed = 0; }
+    var Tp = vSub(T, vMul(ah, pull));                    // 拉弓: 只有尖端縮回
+    var B = vSub(Tp, vMul(ah, TA.HEAD)), C = vSub(B, vMul(ah, vLen(vSub(B, S)) / 2));
+    // 進場 / 收起: de Casteljau 截取 0~g 的那段曲線, 箭頭跟著長出
+    var g = clamp(grow, 0, 1), hs = 1, Bc = B, Cc = C, hd = ah;
+    if (g < 1) {
+      var gq = eOut(g), Cg = V(S.x + (C.x - S.x) * gq, S.y + (C.y - S.y) * gq);
+      Bc = vQuad(S, C, B, gq); Cc = Cg; hd = vNorm(vSub(Bc, Cg)); if (vLen(vSub(Bc, Cg)) < 0.01) hd = ah;
+      hs = clamp(gq, 0.15, 1);
+    }
+    var hl = TA.HEAD * hs * sq, hw = TA.HW * hs * (1 + (1 - sq) * 0.8);      // 壓扁: 箭頭變短變寬, 尖端不動、箭尾不動
+    var P = vAdd(Bc, vMul(hd, TA.HEAD * hs)), Bh = vSub(P, vMul(hd, hl));
+    var Pi = vSub(P, vMul(hd, 2.5));                                        // 尖端內縮 2.5: 粗描邊外緣剛好到 tip
+    var nh = vPerp(hd), N = 24, left = [], right = [], i, wEnd = TA.W0 + (TA.W1 - TA.W0) * (g < 1 ? eOut(g) : 1);
+    function tanAt(u) { var d = vAdd(vMul(vSub(Cc, S), 2 * (1 - u)), vMul(vSub(Bh, Cc), 2 * u)); return vLen(d) < 0.01 ? hd : vNorm(d); }
     for (i = 0; i <= N; i++) {
-      var u = i / N, pt = vQuad(S2, C2, B, u);
-      var tg = vNorm(vAdd(vMul(vSub(C2, S2), 2 * (1 - u)), vMul(vSub(B, C2), 2 * u))), nn = vPerp(tg), w = 7 + 9 * u;
+      var u = i / N, pt = vQuad(S, Cc, Bh, u), nn = vPerp(tanAt(u)), w = TA.W0 + (wEnd - TA.W0) * u;
       left.push(vAdd(pt, vMul(nn, w))); right.push(vSub(pt, vMul(nn, w)));
     }
-    var dir0 = vNorm(vSub(C2, S2));
     var shape = left.slice();
-    shape.push(vAdd(B, vMul(nh, 16)), vAdd(vAdd(B, vMul(nh, 40)), vMul(dh, -12)), P, vAdd(vSub(B, vMul(nh, 40)), vMul(dh, -12)), vSub(B, vMul(nh, 16)));
+    shape.push(vAdd(Bh, vMul(nh, Math.min(wEnd, hw))), vSub(vAdd(Bh, vMul(nh, hw)), vMul(hd, 6 * hs)), Pi, vSub(vSub(Bh, vMul(nh, hw)), vMul(hd, 6 * hs)), vSub(Bh, vMul(nh, Math.min(wEnd, hw))));
     for (i = N; i >= 0; i--) shape.push(right[i]);
-    shape.push(vAdd(S2, vMul(dir0, 9)));
     function path() { polyV(ctx, shape); ctx.closePath(); }
     ctx.save();
-    if (grow < 1) { var g = eOut(grow); ctx.translate(S0.x, S0.y); ctx.scale(g, g); ctx.translate(-S0.x, -S0.y); ctx.globalAlpha *= clamp(grow * 3, 0, 1); }
+    if (g < 1) ctx.globalAlpha *= clamp(g * 4, 0, 1);
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    if (speed > 0) { // 彈射時速度線: 貼在箭身後段兩側(不畫到箭尾後方)
+    if (speed > 0) { // 彈射速度線: 箭頭兩側後方各一條, 平行於 â
       ctx.save(); ctx.globalAlpha *= speed; ctx.strokeStyle = '#fff6c8'; ctx.lineWidth = 3;
-      var nS = vPerp(dir0);
-      for (i = -1; i <= 1; i++) {
-        if (i === 0) continue; var a0 = vAdd(vAdd(S2, vMul(dir0, 14)), vMul(nS, i * 15)), a1 = vAdd(vAdd(S2, vMul(dir0, 40)), vMul(nS, i * 18));
-        ctx.beginPath(); ctx.moveTo(a0.x, a0.y); ctx.lineTo(a1.x, a1.y); ctx.stroke();
-      }
+      for (i = -1; i <= 1; i += 2) { var s0 = vAdd(vSub(Bh, vMul(hd, 10)), vMul(nh, i * (hw + 6))), s1 = vAdd(vSub(Bh, vMul(hd, 34)), vMul(nh, i * (hw + 6))); ctx.beginPath(); ctx.moveTo(s0.x, s0.y); ctx.lineTo(s1.x, s1.y); ctx.stroke(); }
       ctx.restore();
     }
-    var ang = Math.atan2(dh.y, dh.x);
-    ctx.translate(P.x, P.y); ctx.rotate(ang); ctx.scale(sq, 1 + (1 - sq) * 0.7); ctx.rotate(-ang); ctx.translate(-P.x, -P.y);
     // 厚度: 往右下擠出, 但不往指向方向前進(不超過尖端)
-    var off = V(4, 5), pr = off.x * dh.x + off.y * dh.y; if (pr > 0) off = vSub(off, vMul(dh, pr)); else if (pr < -2) off = vSub(off, vMul(dh, pr + 2));
+    var off = V(3, 4), pr = off.x * hd.x + off.y * hd.y; if (pr > 0) off = vSub(off, vMul(hd, pr));
     ctx.save(); ctx.translate(off.x, off.y); path(); ctx.fillStyle = K.selectDeep; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = K.edge; ctx.stroke(); ctx.restore();
-    path(); ctx.fillStyle = lin(ctx, S2.x, S2.y, P.x, P.y, [0, '#ffe98a', 0.6, K.select, 1, '#ffc928']); ctx.fill();
+    path(); ctx.fillStyle = lin(ctx, S.x, S.y, P.x, P.y, [0, '#ffe98a', 0.6, K.select, 1, '#ffc928']); ctx.fill();
     ctx.lineWidth = 4; ctx.strokeStyle = K.edge; ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 3.5;
+    // 白色高光: 箭身一條 + 箭頭一道
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 2.5;
     var hp = [];
-    for (i = 3; i <= 19; i++) { var uu = i / N, pp = vQuad(S2, C2, B, uu), tt = vNorm(vAdd(vMul(vSub(C2, S2), 2 * (1 - uu)), vMul(vSub(B, C2), 2 * uu))); hp.push(vAdd(pp, vMul(vPerp(tt), (7 + 9 * uu) * 0.45))); }
+    for (i = 3; i <= 20; i++) { var uu = i / N, pp = vQuad(S, Cc, Bh, uu); hp.push(vAdd(pp, vMul(vPerp(tanAt(uu)), (TA.W0 + (wEnd - TA.W0) * uu) * 0.42))); }
     polyV(ctx, hp); ctx.stroke();
-    var h0 = vAdd(vAdd(B, vMul(nh, 22)), vMul(dh, 4)), h1 = vAdd(vSub(P, vMul(dh, 16)), vMul(nh, 5));
+    var h0 = vAdd(vSub(Bh, vMul(hd, 2)), vMul(nh, hw * 0.55)), h1 = vAdd(vSub(Pi, vMul(hd, 10 * hs)), vMul(nh, 3 * hs));
     ctx.beginPath(); ctx.moveTo(h0.x, h0.y); ctx.lineTo(h1.x, h1.y); ctx.stroke();
     ctx.restore();
-    if (impact >= 0 && impact <= 1) { // 衝擊刺: 尖端往箭尾那側扇開(與指向夾角 < 90°), 不蓋目標
+    if (impact >= 0 && impact <= 1) { // 衝擊刺: 尖端往箭尾那側扇開(與指向反方向夾角 < 90°), 不蓋目標
       ctx.save(); ctx.globalAlpha *= 1 - impact; ctx.lineJoin = 'round';
-      var bk = vMul(dh, -1), angs = [0.75, -0.75, 1.1, -1.1, 1.4, -1.4];
+      var bk = vMul(hd, -1), angs = [0.8, -0.8, 1.15, -1.15, 1.45, -1.45];
       for (i = 0; i < angs.length; i++) {
-        var dv = vRot(bk, angs[i]), pv = vPerp(dv), r0 = 34 + 12 * impact, r1 = r0 + 8 + 16 * (1 - impact) * (i < 2 ? 1.2 : 1);
-        var b1 = vAdd(vAdd(P, vMul(dv, r0)), vMul(pv, 4)), b2 = vSub(vAdd(P, vMul(dv, r0)), vMul(pv, 4)), tp = vAdd(P, vMul(dv, r1));
+        var dv = vRot(bk, angs[i]), pv = vPerp(dv), r0 = 30 + 8 * impact, r1 = r0 + 6 + 12 * (1 - impact) * (i < 2 ? 1.2 : 1);
+        var b1 = vAdd(vAdd(P, vMul(dv, r0)), vMul(pv, 3.5)), b2 = vSub(vAdd(P, vMul(dv, r0)), vMul(pv, 3.5)), tp = vAdd(P, vMul(dv, r1));
         ctx.beginPath(); ctx.moveTo(b1.x, b1.y); ctx.lineTo(tp.x, tp.y); ctx.lineTo(b2.x, b2.y); ctx.closePath();
         ctx.fillStyle = i < 2 ? '#ffffff' : K.select; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.stroke();
       }
@@ -2340,100 +2349,113 @@
     }
   }
 
-  // ---------- 文字泡泡(tut-text B) ----------
-  var TB = { px: 30, lh: 46, padX: 30, padY: 22, maxW: 560, kpx: 24, tail: 14 };
-  var PUNCT_HOLD = ',，、!！。';               // 之後多停 0.18 秒
+  // ---------- 提示板(tut-text B 深色木板; polish 第 6 輪: 無尖角、整句尺寸、逐行置中、\n 強制換行) ----------
+  var TB = { px: 30, lh: 46, padX: 30, padY: 22, maxW: 560, kpx: 24, minNext: 140, inDur: 0.25 };
+  var TUT_TIME = { ch: 0.045, key: 0.10, hold: 0.12, pop: 0.15, fade: 0.25 }; // 逐字規則(與 RD 同一條)
+  var PUNCT_HOLD = ',，、!！。';               // 之後多停 0.12 秒
   var NO_LEAD = ',，、!！。?？;；:：)）」』》〉'; // 不放行首
-  function tutTokens(s) { // [關鍵詞]、{Z} 句中按鍵; 其餘每字一個
+  function tutTokens(s) { // [關鍵詞]、{Z} 句中按鍵、\n 強制換行; 其餘每字一個
     var o = [], i = 0, hl = false;
     s = typeof s === 'string' ? s : '';
     while (i < s.length && o.length < 400) {
       var c = s.charAt(i);
       if (c === '[') { hl = true; i++; continue; }
       if (c === ']') { hl = false; i++; continue; }
+      if (c === '\n') { o.push({ nl: true }); i++; continue; }
+      if (c === '\r') { i++; continue; }
       if (c === '{') { var j = s.indexOf('}', i); if (j > i && j - i <= 6) { o.push({ k: s.substring(i + 1, j) }); i = j + 1; continue; } }
       o.push({ c: c, hl: hl }); i++;
     }
     return o;
   }
-  function tutTimes(tk) { // 每個字出現的累計時刻(與 RD 同一條規則)
+  function tutTimes(tk) { // 每個字出現的累計時刻
     var t = 0, r = [];
-    for (var i = 0; i < tk.length; i++) { r.push(t); t += tk[i].k !== undefined ? 0.16 : 0.077; if (tk[i].c && PUNCT_HOLD.indexOf(tk[i].c) >= 0) t += 0.18; }
+    for (var i = 0; i < tk.length; i++) {
+      r.push(t);
+      if (tk[i].nl) continue;
+      t += tk[i].k !== undefined ? TUT_TIME.key : TUT_TIME.ch;
+      if (tk[i].c && PUNCT_HOLD.indexOf(tk[i].c) >= 0) t += TUT_TIME.hold;
+    }
     return r;
   }
-  function tutLayout(ctx, tk) {
+  function tutLayout(ctx, tk) { // 回傳每個字的 (行內 x, 行號, 寬) 與每行寬; 繪製時逐行置中
     var x = 0, line = 0, out = [], lw = [0], kw = TB.px * 1.7;
     for (var i = 0; i < tk.length; i++) {
-      var k = tk[i], w = k.k !== undefined ? kw : tw(ctx, k.c, TB.px, true);
+      var k = tk[i];
+      if (k.nl) { out.push({ x: x, line: line, w: 0 }); x = 0; line++; lw.push(0); continue; }
+      var w = k.k !== undefined ? kw : tw(ctx, k.c, TB.px, true);
       if (x + w > TB.maxW && x > 0 && !(k.c && NO_LEAD.indexOf(k.c) >= 0)) { x = 0; line++; lw.push(0); }
       if (x === 0 && k.c === ' ') w = 0;
       out.push({ x: x, line: line, w: w }); x += w; lw[line] = x;
     }
     var mx = 0; for (i = 0; i < lw.length; i++) mx = Math.max(mx, lw[i]);
-    return { items: out, lines: lw.length, maxW: mx };
+    return { items: out, lines: lw.length, lw: lw, maxW: mx };
   }
-  function tutBubble(ctx, b, t) {
+  function boardSize(L, hasNext) { return { w: Math.max(hasNext ? TB.minNext : 0, L.maxW + TB.padX * 2), h: L.lines * TB.lh + TB.padY * 2 }; }
+  // 提示板的版面(箭尾也用它): 實際排好的矩形 + 進場 / 收起的縮放與淡出(以板子中心)
+  function tutBoard(ctx, b) {
     var x = num(b.x, 640), y = num(b.y, 300), place = b.place === 'below' ? 'below' : 'above';
-    var hasCont = typeof b.cont === 'string';
+    var hasCont = typeof b.cont === 'string', hasNext = !!(b.next && typeof b.next === 'object');
     var tk1 = tutTokens(b.text), tk2 = hasCont ? tutTokens(b.cont) : [], tk = tk1.concat(tk2);
-    var r1 = tutTimes(tk1), r2 = tutTimes(tk2);
-    var Lf = tutLayout(ctx, tk), L1 = tutLayout(ctx, tk1);
-    var typeT = num(b.typeT, 0), contT = b.contT == null ? null : num(b.contT, 0);
-    var inQ = clamp(num(b.inT, 0.32), 0, 0.32) / 0.32, outT = b.outT == null ? null : clamp(num(b.outT, 0), 0, 0.25);
-    var bwF = Math.max(200, Lf.maxW + TB.padX * 2), bhF = Lf.lines * TB.lh + TB.padY * 2;
-    var bw = bwF, bh = bhF;
-    if (hasCont && contT != null && contT < 0.2) { // 接句: 0.2 秒長到新大小
-      var gq = sm(contT / 0.2), bw1 = Math.max(200, L1.maxW + TB.padX * 2), bh1 = L1.lines * TB.lh + TB.padY * 2;
-      bw = lerp(bw1, bwF, gq); bh = lerp(bh1, bhF, gq);
+    var Lf = tutLayout(ctx, tk), szF = boardSize(Lf, hasNext), bw = szF.w, bh = szF.h;
+    var contT = b.contT == null ? null : num(b.contT, 0);
+    if (hasCont && contT != null && contT < 0.2) { // 接句: 決定接句那一刻以 0.2 秒長到新大小
+      var sz1 = boardSize(tutLayout(ctx, tk1), hasNext), gq = sm(clamp(contT, 0, 0.2) / 0.2);
+      bw = lerp(sz1.w, szF.w, gq); bh = lerp(sz1.h, szF.h, gq);
     }
-    var bx = clamp(x - bw / 2, 20, 1260 - bw), by = place === 'above' ? y - bh : y;
-    var rootX = clamp(x, bx + 34, bx + bw - 34), tipY = place === 'above' ? by + bh + TB.tail : by - TB.tail, edgeY = place === 'above' ? by + bh : by;
-    var sc = 0.6 + 0.4 * eBack(inQ), al = clamp(inQ / 0.6, 0, 1);
+    var bx = clamp(x - bw / 2, 20, Math.max(20, 1260 - bw)), by = place === 'above' ? y - bh : y;
+    var inQ = clamp(num(b.inT, TB.inDur), 0, TB.inDur) / TB.inDur, outT = b.outT == null ? null : clamp(num(b.outT, 0), 0, 0.25);
+    var sc = 0.6 + 0.4 * eBack(inQ), al = clamp(inQ / 0.5, 0, 1);
     if (outT != null) { var oq = outT / 0.25; sc *= 1 - 0.85 * eOut(oq); al *= 1 - oq; }
-    if (al <= 0.001) return;
+    return { x: bx, y: by, w: bw, h: bh, cx: bx + bw / 2, cy: by + bh / 2, sc: sc, al: al, tk1: tk1, tk2: tk2, tk: tk, L: Lf, contT: contT, outQ: outT == null ? 0 : outT / 0.25 };
+  }
+  // 「按 Z 繼續」徽章(提示板與操作方式面板共用): Z 按鍵外觀中心 (kx, ky) + 左邊小字 label + 每秒外擴一圈金環(≤18px)並輕輕一鼓
+  function nextBadge(ctx, kx, ky, t, label, key, k) {
+    k = k == null ? 1 : k; if (k <= 0.001) return;
+    var ph = fr(t), lab = str(label, '繼續');
+    ctx.save(); ctx.translate(kx, ky); ctx.scale(k, k);
+    circle(ctx, 0, 0, 18 + 18 * eOut(ph)); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,216,74,' + (0.85 * (1 - ph)).toFixed(3) + ')'; ctx.stroke();
+    var lw = tw(ctx, lab, 16, true) + 18;
+    rr(ctx, -26 - lw, -13, lw, 26, 6); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.stroke();
+    text(ctx, lab, -26 - lw / 2, 1, 16, K.ink, 'center', true);
+    var pop = 1 + 0.08 * Math.max(0, Math.sin(ph * TAU));
+    ctx.scale(pop, pop); keycap(ctx, key === 'x' ? 'x' : 'z', 0, 0, 20, 'hot');
+    ctx.restore();
+  }
+  function tutBubble(ctx, b, t, Bd) {
+    if (Bd.al <= 0.001) return;
+    var bx = Bd.x, by = Bd.y, bw = Bd.w, bh = Bd.h, tk = Bd.tk, tk1 = Bd.tk1, Lf = Bd.L;
+    var r1 = tutTimes(tk1), r2 = tutTimes(Bd.tk2), typeT = num(b.typeT, 0), contT = Bd.contT, i;
     ctx.save();
-    ctx.globalAlpha *= al;
-    ctx.translate(x, tipY); ctx.scale(sc, sc); ctx.translate(-x, -tipY);
-    // 木板泡泡: 落影 + 深木板 + 板縫 + 深邊 + 內側淡金線 + 尾巴(長 14, 在泡泡外)
-    var dirY = place === 'above' ? 1 : -1;
+    ctx.globalAlpha *= Bd.al;
+    ctx.translate(Bd.cx, Bd.cy); ctx.scale(Bd.sc, Bd.sc); ctx.translate(-Bd.cx, -Bd.cy);
+    // 深色木板: 落影 + 深木板 + 板縫 + 深邊 + 內側淡金線(沒有尾巴 / 尖角)
     rr(ctx, bx + 3, by + 6, bw, bh, 14); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill();
     rr(ctx, bx, by, bw, bh, 14); ctx.fillStyle = K.board; ctx.fill();
-    poly(ctx, [rootX - 14, edgeY - dirY * 2, rootX + 14, edgeY - dirY * 2, x, tipY]); ctx.fill();
     ctx.save(); rr(ctx, bx, by, bw, bh, 14); ctx.clip();
     for (var yy = by + 26; yy < by + bh; yy += 26) { ctx.fillStyle = K.seam; ctx.fillRect(bx, yy, bw, 1.5); }
     ctx.restore();
     ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = K.edge;
-    ctx.beginPath(); ctx.moveTo(rootX + 14, edgeY); ctx.lineTo(x, tipY); ctx.lineTo(rootX - 14, edgeY); ctx.stroke();
     rr(ctx, bx + 1.5, by + 1.5, bw - 3, bh - 3, 13); ctx.stroke();
-    ctx.fillStyle = K.board; ctx.fillRect(rootX - 12.5, place === 'above' ? edgeY - 3 : edgeY - 0.5, 25, 3.5);
     rr(ctx, bx + 6, by + 6, bw - 12, bh - 12, 9); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,216,74,0.35)'; ctx.stroke();
-    // 字: 每字從下方 10px 彈起、回彈落定(0.18 秒); 新字金色 0.3 秒內退成米白, 關鍵詞常駐金
-    var x0 = bx + TB.padX, y0 = by + TB.padY + TB.lh / 2, i;
-    ctx.save(); rr(ctx, bx, by, bw, bh, 14); ctx.clip(); // 接句長大中, 還沒到的字不畫出泡泡
+    // 字: 逐行水平置中、整塊垂直置中; 每字從下方 10px 彈起回彈落定(0.15 秒), 新字金色 0.25 秒內退成米白, 關鍵詞常駐金
+    var y0 = by + bh / 2 - (Lf.lines * TB.lh) / 2 + TB.lh / 2;
+    ctx.save(); rr(ctx, bx, by, bw, bh, 14); ctx.clip(); // 接句長大中, 還沒到的字不畫出板子
     for (i = 0; i < tk.length; i++) {
+      if (tk[i].nl) continue;
       var first = i < tk1.length, rt = first ? r1[i] : r2[i - tk1.length], tt = first ? typeT : contT;
       if (tt == null || tt < 0 || tt < rt) continue;
-      var it = Lf.items[i], age = tt - rt, q = seg(age, 0, 0.18), s = 0.4 + 0.6 * eBack(q), jy = 10 * (1 - eBack(q));
-      var cx = x0 + it.x + it.w / 2, cy = y0 + it.line * TB.lh + jy;
+      var it = Lf.items[i], age = tt - rt, q = seg(age, 0, TUT_TIME.pop), s = 0.4 + 0.6 * eBack(q), jy = 10 * (1 - eBack(q));
+      var lx = bx + bw / 2 - Lf.lw[it.line] / 2;
+      var cx = lx + it.x + it.w / 2, cy = y0 + it.line * TB.lh + jy;
       ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s);
       if (tk[i].k !== undefined) keycap(ctx, tk[i].k, 0, -1, TB.kpx, 'normal');
-      else if (tk[i].c !== ' ') text(ctx, tk[i].c, 0, 1, TB.px, tk[i].hl ? K.select : mix(K.select, K.cream, seg(age, 0, 0.3)), 'center', true, 6, K.edge);
+      else if (tk[i].c !== ' ') text(ctx, tk[i].c, 0, 1, TB.px, tk[i].hl ? K.select : mix(K.select, K.cream, seg(age, 0, TUT_TIME.fade)), 'center', true, 6, K.edge);
       ctx.restore();
     }
     ctx.restore();
-    // 「按 Z 繼續」徽章: 右下角框線上騎一顆 Z 按鍵外觀 + 小字 label, 每秒外擴一圈金環(≤18px)並輕輕一鼓
     var nx = b.next;
-    if (nx && typeof nx === 'object' && nx.show === true) {
-      var kx = bx + bw - 34, ky = by + bh, ph = fr(t), lab = str(nx.label, '繼續');
-      ctx.save();
-      circle(ctx, kx, ky, 18 + 18 * eOut(ph)); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,216,74,' + (0.85 * (1 - ph)).toFixed(3) + ')'; ctx.stroke();
-      var lw = tw(ctx, lab, 16, true) + 18;
-      rr(ctx, kx - 26 - lw, ky - 13, lw, 26, 6); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.stroke();
-      text(ctx, lab, kx - 26 - lw / 2, ky + 1, 16, K.ink, 'center', true);
-      var pop = 1 + 0.08 * Math.max(0, Math.sin(ph * TAU));
-      ctx.translate(kx, ky); ctx.scale(pop, pop); keycap(ctx, nx.key === 'x' ? 'x' : 'z', 0, 0, 20, 'hot');
-      ctx.restore();
-    }
+    if (nx && typeof nx === 'object' && nx.show === true) nextBadge(ctx, bx + bw - 34, by + bh, t, nx.label, nx.key);
     ctx.restore();
   }
 
@@ -2491,7 +2513,7 @@
     ctx.restore();
   }
 
-  var TUT_STEPS = ['map_pick', 'prep_start', 'demo_you', 'demo_mat', 'demo_mon', 'demo_goal', 'demo_sites', 'gate', 'map_replay', 'map_slow', 'map_upgrade', 'map_shop'];
+  var TUT_STEPS = ['map_pick', 'prep_start', 'demo_you', 'demo_mat', 'demo_mon', 'demo_goal', 'demo_sites', 'demo_start', 'gate', 'map_replay', 'map_slow', 'map_upgrade', 'map_shop'];
   function drawTutorial(ctx, st) {
     st = obj(st);
     var step = oneOf(st.step, TUT_STEPS, ''), t = num(st.t, 0);
@@ -2499,25 +2521,34 @@
     var bubble = (st.bubble && typeof st.bubble === 'object') ? st.bubble : null;
     var dDur = Math.max(0.01, num(st.doneDur, 0.3)), dT = clamp(num(st.doneT, dDur), 0, dDur), done = dT < dDur, dq = dT / dDur, i;
     ctx.save();
+    // 由下到上: 聚光燈暗幕與光洞 → 箭頭 → 提示板(蓋在箭尾上)
     if (st.spot && typeof st.spot === 'object') { ctx.save(); tutSpot(ctx, st.spot, t); ctx.restore(); }
-    // 完成特效(地圖 1、準備 1): 泡泡與箭頭一起縮進箭頭尖端 + 尖端噴 4 顆金星
+    var Bd = bubble ? tutBoard(ctx, bubble) : null;
+    if (Bd && Bd.outQ > 0) grow = Math.min(grow, 1 - Bd.outQ); // 板子收起時箭頭同步沿曲線縮回箭尾
+    // 完成特效(地圖 1、準備 1): 提示板與箭頭一起縮進第 0 支箭頭的尖端 + 尖端噴 4 顆金星
     var ax = 640, ay = 360;
-    if (arrows.length) { ax = num(obj(arrows[0]).tipX, 640); ay = num(obj(arrows[0]).tipY, 360); }
-    else if (bubble) { ax = num(bubble.x, 640); ay = num(bubble.y, 360); }
+    if (arrows.length && Bd) { ax = num(obj(arrows[0]).tipX, 640); ay = num(obj(arrows[0]).tipY, 360); }
+    else if (Bd) { ax = Bd.cx; ay = Bd.cy; }
     ctx.save();
     if (done) { var s = 1 - sm(dq); ctx.translate(ax, ay); ctx.scale(Math.max(0.001, s), Math.max(0.001, s)); ctx.translate(-ax, -ay); }
-    for (i = 0; i < arrows.length; i++) { ctx.save(); tutArrowB(ctx, obj(arrows[i]), t - i * 0.15, done ? 1 : grow); ctx.restore(); }
-    if (bubble) tutBubble(ctx, bubble, t);
+    if (Bd) { // 箭頭一定搭配提示板(bubble 為 null 時不畫箭頭)
+      for (i = 0; i < arrows.length; i++) {
+        var a = obj(arrows[i]), tl = tutTail(a, Bd), S = tl.S;
+        S = V(Bd.cx + (S.x - Bd.cx) * Bd.sc, Bd.cy + (S.y - Bd.cy) * Bd.sc); // 箭尾跟著板子的進場 / 收起縮放
+        ctx.save(); tutArrowB(ctx, a, S, t - i * 0.15, done ? 1 : grow); ctx.restore();
+      }
+      tutBubble(ctx, bubble, t, Bd);
+    }
     ctx.restore();
-    if (done) { // 4 顆金星往外噴(≤30px)
+    if (done && Bd) { // 4 顆金星往外噴(≤30px)
       ctx.save(); ctx.globalAlpha *= 1 - 0.6 * dq; ctx.fillStyle = K.select;
-      for (i = 0; i < 4; i++) { var a = -Math.PI / 4 + i * Math.PI / 2, d = 30 * eOut(dq); star4(ctx, ax + Math.cos(a) * d, ay + Math.sin(a) * d, 7 * (1 - 0.5 * dq)); ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = K.edge; ctx.stroke(); }
+      for (i = 0; i < 4; i++) { var an = -Math.PI / 4 + i * Math.PI / 2, d = 30 * eOut(dq); star4(ctx, ax + Math.cos(an) * d, ay + Math.sin(an) * d, 7 * (1 - 0.5 * dq)); ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = K.edge; ctx.stroke(); }
       ctx.restore();
     }
     ctx.restore();
   }
 
-  // ================= 操作方式面板(ctrl-panel A 羊皮紙卷軸 + 逐組點亮) =================
+  // ================= 操作方式面板(ctrl-panel A 羊皮紙卷軸 + 逐組點亮; polish 第 6 輪時間軸 0~3.2 + 等 Z + dockT 收合) =================
   var CP = { BW: 250, BH: 226, KF: 0.6, FX: 18, FY: 54 };
   var CP_ROWS = [{ k: ['left', 'right'], s: '移動' }, { k: ['up'], s: '跳躍' }, { k: ['z'], s: '攻擊' }, { k: ['x'], s: '技能' }];
   function cpRod(ctx, y, w) {
@@ -2559,39 +2590,51 @@
     ctx.restore();
     cpRod(ctx, 0, BW); cpRod(ctx, Math.max(0, h), BW);
   }
+  // 跳躍示範期間整張變淡: T 1.2~1.3 由 1 → 0.35、1.3~1.7 停 0.35、1.7~1.85 回 1
+  function cpJumpAlpha(T) {
+    if (T < 1.2 || T >= 1.85) return 1;
+    if (T < 1.3) return lerp(1, 0.35, (T - 1.2) / 0.1);
+    if (T < 1.7) return 0.35;
+    return lerp(0.35, 1, (T - 1.7) / 0.15);
+  }
   function drawCtrlPanel(ctx, st) {
     st = obj(st);
-    var dur = Math.max(0.01, num(st.dur, 6.25)), T = clamp(num(st.T, dur), 0, dur) * 6.25 / dur; // 換算到 6.25 秒時間軸
+    var T = clamp(num(st.T, 3.2), 0, 3.2), waitZ = st.waitZ === true, dockT = st.dockT == null ? null : clamp(num(st.dockT, 0.95), 0, 0.95);
     var px = num(st.px, 100), py = num(st.py, 462), al = clamp(num(st.alpha, 1), 0, 1), t = num(st.t, 0);
     var BW = CP.BW, BH = CP.BH, KF = CP.KF, FX = CP.FX, FY = CP.FY, i;
     // 原尺寸位置: 紙底在角色頭頂上方 14px(py − 32), 水平置中在角色, 含木軸外框左緣 ≥ 12
     var BIGX = clamp(px - BW / 2, 29, W - 29 - BW), BIGY = clamp(py - 32 - BH, 56, H - BH - 20);
-    function pathAt(s) { var cx = Math.max(24, BIGX - 40), cy = 60, u = 1 - s; /* 控制點不往左越過 x 24: 含木軸外框不出畫面 */ return { x: u * u * BIGX + 2 * u * s * cx + s * s * FX, y: u * u * BIGY + 2 * u * s * cy + s * s * FY }; }
+    function pathAt(s) { var cx = Math.max(24, BIGX - 40), cy = 60, u = 1 - s; /* 上拱弧線; 控制點不往左越過 x 24 */ return { x: u * u * BIGX + 2 * u * s * cx + s * s * FX, y: u * u * BIGY + 2 * u * s * cy + s * s * FY }; }
     ctx.save();
-    if (T >= 6.25) ctx.globalAlpha *= al; // 只在固定後讓路
-    if (T < 0.25) { // 捲起的卷軸從胸口冒出, 浮到頭頂上方並放大
-      var q = eOut(T / 0.25), k0 = lerp(0.25, 1, q);
-      ctx.globalAlpha *= clamp(q * 1.5, 0, 1);
-      ctx.translate(lerp(px, BIGX + BW / 2, q), lerp(py - 4, BIGY, q)); ctx.scale(k0, k0); ctx.translate(-BW / 2, 0);
-      cpCard(ctx, 0, 0, 0, -1);
-    } else if (T < 4.95) { // 攤開 → 逐組點亮 → 停住
-      var u = eOut(seg(T, 0.25, 0.85)), tail = seg(T, 0.75, 0.85), lit = -1;
-      if (T >= 0.85 && T < 4.45) lit = Math.min(3, Math.floor((T - 0.85) / 0.9));
-      ctx.translate(BIGX, BIGY);
-      cpCard(ctx, BH * u, tail, 0, lit);
-    } else if (T < 5.95) { // 尖角收起, 縮成 0.6 倍沿上拱弧線滑到左上角, 途中高度縮 25% 再攤回, 後方拖 5 顆金色光點
-      var s = eInOut(seg(T, 4.95, 5.95)), kk = lerp(1, KF, s), hh = BH * (1 - 0.25 * Math.sin(Math.PI * s)), tailB = 1 - seg(T, 4.95, 5.07);
+    if (dockT == null) {
+      ctx.globalAlpha *= cpJumpAlpha(T);
+      if (T < 0.2) { // 捲起的卷軸從胸口冒出, 浮到頭頂上方並放大
+        var q = eOut(T / 0.2), k0 = lerp(0.25, 1, q);
+        ctx.globalAlpha *= clamp(q * 1.5, 0, 1);
+        ctx.translate(lerp(px, BIGX + BW / 2, q), lerp(py - 4, BIGY, q)); ctx.scale(k0, k0); ctx.translate(-BW / 2, 0);
+        cpCard(ctx, 0, 0, 0, -1);
+      } else { // 0.2~0.6 攤開(0.5~0.6 長出尖角)→ 0.6~3.0 逐組點亮 → 3.0~3.2 停住 → 等 Z
+        var u = eOut(seg(T, 0.2, 0.6)), tail = seg(T, 0.5, 0.6), lit = -1;
+        if (T >= 0.6 && T < 3.0) lit = Math.min(3, Math.floor((T - 0.6) / 0.6));
+        ctx.translate(BIGX, BIGY);
+        cpCard(ctx, BH * u, tail, 0, lit);
+        if (waitZ) nextBadge(ctx, BW - 24, BH - 4, t, '繼續', 'z'); // 下軸右端上方
+      }
+    } else if (dockT < 0.7) { // 徽章與尖角 0~0.12 收起; 縮成 0.6 倍沿上拱弧線滑到左上角, 途中高度縮 25% 再攤回, 後方拖 5 顆金色光點
+      var s = eInOut(dockT / 0.7), kk = lerp(1, KF, s), hh = BH * (1 - 0.25 * Math.sin(Math.PI * s)), off = 1 - seg(dockT, 0, 0.12);
       for (i = 5; i >= 1; i--) {
-        var sp = eInOut(seg(T - i * 0.05, 4.95, 5.95)); if (sp <= 0) continue;
+        var sp = eInOut(seg(dockT - i * 0.05, 0, 0.7)); if (sp <= 0) continue;
         var pp = pathAt(sp), pk = lerp(1, KF, sp);
         ctx.save(); ctx.globalAlpha *= 0.65 * (1 - i / 6) * (0.8 + 0.2 * Math.sin(t * 20 + i));
         star4(ctx, pp.x + BW * pk / 2, pp.y + BH * pk / 2, 8 - i); ctx.fillStyle = K.select; ctx.fill(); ctx.restore();
       }
       var p = pathAt(s);
       ctx.translate(p.x, p.y); ctx.scale(kk, kk);
-      cpCard(ctx, hh, tailB, 0, -1);
-    } else { // 落定(5.95~6.25 木軸輕彈 + 金框閃)→ 固定在左上角 (18,54) 150×136
-      var a = seg(T, 5.95, 6.25), bounce = 1 + 0.05 * Math.sin(Math.PI * a), fl = a < 1 ? 1 - a : 0;
+      cpCard(ctx, hh, off, 0, -1);
+      if (off > 0) nextBadge(ctx, BW - 24, hh - 4, t, '繼續', 'z', off);
+    } else { // 0.7~0.95 落定(木軸輕彈 + 金框閃)→ 固定在左上角 (18,54) 150×136
+      var a = seg(dockT, 0.7, 0.95), bounce = 1 + 0.05 * Math.sin(Math.PI * a), fl = a < 1 ? 1 - a : 0;
+      if (dockT >= 0.95) ctx.globalAlpha *= al; // 只在固定後讓路
       ctx.translate(FX + BW * KF / 2, FY); ctx.scale(KF * bounce, KF * bounce); ctx.translate(-BW / 2, 0);
       cpCard(ctx, BH, 0, fl, -1);
       if (fl > 0) { ctx.globalAlpha *= fl; for (var j = 0; j < 4; j++) { star4(ctx, j % 2 ? BW + 12 : -12, j < 2 ? -6 : BH + 6, 10 * fl); ctx.fillStyle = K.select; ctx.fill(); } }
@@ -3174,7 +3217,7 @@
     rr(ctx, 817, gy + 53, 300, 64, 10); ctx.fillStyle = row === 2 ? K.select : '#ece4d2'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.stroke();
     text(ctx, '開始挑戰', 927, gy + 86, 28, K.ink, 'center', true);
     keycap(ctx, 'z', 1067, gy + 85, 22, 'normal'); // 金色石鍵上用深墨按鍵(金面會和鈕融在一起)
-    keyRow(ctx, [['↑↓', '換列'], ['←→', '選擇'], ['Z', '確定'], ['X', '關閉']], 60, 674, 13, 'left');
+    if (st.hintOff !== true) keyRow(ctx, [['↑↓', '換列'], ['←→', '選擇'], ['Z', '確定'], ['X', '關閉']], 60, 674, 13, 'left'); // 準備 1 教學那一步讓位給提示板
     ctx.restore();
   }
   function drawSiteHighlight(ctx, st) {

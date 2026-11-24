@@ -222,12 +222,13 @@ function totalRates() {
 // 流程只走一遍: 地圖 1 選關 → 準備 1 開始挑戰 → 演出 1~6(第一次進第 1 關暫停自動播)→ 自由遊玩 →
 // 第一次過關回大地圖(鎖住): 地圖 2(2a / 2b)→ 地圖 3 升級所 → 地圖 4 商店 → 總結板。
 // 計時一律用 T.clk(暫停時不走); 逐字規則與美術共用: 每字 0.077、{Z} 0.16、, ， 、 ! ！ 。 後多停 0.18、彈出 0.32 後開始打字、最後一字後再 0.32 才算顯示完
-var TUT_CHAR = 0.077, TUT_KEYDUR = 0.16, TUT_PUNCT = 0.18, TUT_POP = 0.32, TUT_OUT = 0.25, CP_DUR = 6.25;
+// 第 6 輪: 逐字 0.045 / {Z} 0.10 / 標點後多停 0.12 / 彈出 0.25 / 最後一字後 0.25 算顯示完, 全段按 Z 推進
+var TUT_CHAR = 0.045, TUT_KEYDUR = 0.10, TUT_PUNCT = 0.12, TUT_POP = 0.25, TUT_OUT = 0.25, CP_WAIT = 3.2, CP_DOCK = 0.95;
 var T = null;
 function tutReset() {
   T = { off: false, clk: 0, stage: null, scene: null, step: '', pick: 0, prep: 0, demo: 0, rep: 0,
     bub: null, arrows: [], arrowsT: 0.25, swapFn: null, spot: null, eff: null, gate: null,
-    ds: 0, dsT: 0, cpT: 0, fade6: -1, pend6: false, demoSnd: {},
+    ds: 0, dsT: 0, cpT: 0, dockT: null, fade6: -1, pend6: false, demoSnd: {},
     lockMap: false, flightSeen: false, branch: null, sum: null };
 }
 // 第 1 關教學期間(只在第 1 關還沒過關時): 擋終點(規則 2a)、重生(規則 3a)、操作方式面板
@@ -238,7 +239,7 @@ function typeInfo(s) {
   var times = [], t = 0, i = 0, pend = 0;
   while (i < s.length) {
     var ch = s.charAt(i), dur = TUT_CHAR;
-    if (ch === '[' || ch === ']') { i++; continue; }
+    if (ch === '[' || ch === ']' || ch === '\n') { i++; continue; }
     if (ch === '{') { var j = s.indexOf('}', i); if (j > i) { dur = TUT_KEYDUR; i = j; ch = ''; } }
     t += pend + dur; pend = 0;
     times.push(t);
@@ -253,7 +254,7 @@ function typedCount(info, tt) {
   for (k = 0; k < info.times.length; k++) if (info.times[k] <= tt) n++;
   return n;
 }
-function tutArrow(tipX, tipY, tailX, tailY, bend) { return { tipX: tipX, tipY: tipY, tailX: tailX, tailY: tailY, bend: bend }; }
+function tutArrow(tipX, tipY, aimX, aimY, side, along) { return { tipX: tipX, tipY: tipY, aimX: aimX, aimY: aimY, side: side, along: along }; }
 // 開一個泡泡(+ 箭頭): scene 'map' | 'panel' | 'play' 決定哪個畫面才畫
 function tutOpen(step, scene, text, bx, by, place, arrows, nextLabel) {
   T.bub = { step: step, text: text, cont: null, contT: null, x: bx, y: by, place: place, age: 0, outT: null, next: nextLabel || null,
@@ -271,7 +272,7 @@ function tutSwap(fn) {
 function tutAddCont(s) {
   var b = T.bub;
   if (!b || b.cont !== null) return;
-  b.cont = s; b.contT = 0; b.cinfo = typeInfo(s);
+  b.cont = s; b.contT = 0; b.cinfo = typeInfo(s); b.done = false; b.doneT = 0;
 }
 function bubDone(b) {
   if (b.cont !== null) return b.contT >= b.cinfo.last + TUT_POP;
@@ -288,11 +289,11 @@ function bubTick(dt) {
   }
   b.age += dt;
   var n = typedCount(b.info, b.age - TUT_POP);
-  if (n > b.typed) { b.typed = n; sndT('tut_type', 0.07); }
+  if (n > b.typed) { b.typed = n; sndT('tut_type', 0.09); }
   if (b.cont !== null) {
     b.contT += dt;
     n = typedCount(b.cinfo, b.contT);
-    if (n > b.ctyped) { b.ctyped = n; sndT('tut_type', 0.07); }
+    if (n > b.ctyped) { b.ctyped = n; sndT('tut_type', 0.09); }
   }
   var d = bubDone(b);
   b.doneT = d ? b.doneT + dt : 0;
@@ -323,11 +324,11 @@ function lockFor(sec, fn) { G.lockT = sec; G.lockFn = fn; }
 // ---- 地圖 1 / 準備 1(按 Z 後先播 0.3 秒完成特效, 播完才換畫面)
 function tutMapPickOpen() {
   T.stage = 'pick';
-  tutOpen('map_pick', 'map', '選擇這一關', 480, 140, 'above', [tutArrow(480, 277, 430, 150, 0.3)], '進入');
+  tutOpen('map_pick', 'map', '選擇這一關', 440, 134, 'above', [tutArrow(480, 263, 480, 349, 'bottom', 440)], '進入');
 }
 function tutPrepOpen() {
   T.stage = 'prep';
-  tutOpen('prep_start', 'panel', '直接按{Z}開始關卡吧!', 400, 410, 'above', [tutArrow(714, 500, 600, 440, 0.25)]);
+  tutOpen('prep_start', 'panel', '直接按{Z}開始關卡吧!', 518, 596, 'below', [tutArrow(863, 536, 967, 498, 'right', 641)]);
 }
 // 在第 1 關卡片按 Z: 回傳 true = 由教學接手(播完特效再開準備頁)
 function tutPickZ() {
@@ -389,111 +390,121 @@ function solidAboveSign(st) {
   return false;
 }
 function demoGo(n) {
-  var L = R.L, p = R.p, g = L.goal, i;
+  var L = R.L, p = R.p, g = L.goal;
   T.ds = n; T.dsT = 0;
   if (n === 1) {
-    var tx = p.x + p.w / 2 + 4, ty = p.y - p.h / 2 - 4;
-    tutOpen('demo_you', 'play', '這是[你]', tx + 142, ty - 120, 'above', [tutArrow(tx, ty, tx + 112, ty - 110, -0.3)]);
+    // 角色中心 (100, 462): 板子 (290, 330)、尖端 (120, 438)
+    tutOpen('demo_you', 'play', '這是[你]', p.x + 190, p.y - 132, 'above', [tutArrow(p.x + 20, p.y - 24, p.x, p.y, 'bottom', p.x + 130)], '繼續');
   } else if (n === 2) {
-    T.cpT = 0; T.bub = null; T.arrows = []; T.demoSnd = {}; snd('tut_panel');
+    T.cpT = 0; T.dockT = null; T.bub = null; T.arrows = []; T.demoSnd = {}; snd('tut_panel');
   } else if (n === 3) {
-    var arr = [], kinds = ['wood', 'stone', 'crystal'], offs = [[78, -108, 0.3], [58, -128, -0.25], [70, -110, 0.2]], minY = 1e9;
-    kinds.forEach(function (k) {
+    var arr = [];
+    ['wood', 'stone', 'crystal'].forEach(function (k) {
       var d = nearPickOut(k);
       if (!d) return;
-      var o = offs[arr.length], ax = d.x + 12, ay = d.y - 12;
-      arr.push(tutArrow(ax, ay, ax + o[0], ay + o[1], o[2]));
+      // 板子 (630, 336) 估寬 465~795: 目標在板子左邊 → 從左緣出發, 否則從下緣出發
+      if (d.x < 465) arr.push(tutArrow(d.x + 10, d.y - 18, d.x, d.y, 'left', 300));
+      else arr.push(tutArrow(d.x, d.y - 18, d.x, d.y, 'bottom', Math.max(477, Math.min(783, d.x + 22))));
     });
     if (!arr.length) { demoGo(4); return; }
-    arr.forEach(function (a) { minY = Math.min(minY, a.tailY); });
-    tutOpen('demo_mat', 'play', '這是[素材],多多收集,不同素材有不同用途', arr[0].tailX + 30, minY - 20, 'above', arr);
+    tutOpen('demo_mat', 'play', '這是[素材],多多收集,\n不同素材有不同用途', 630, 336, 'above', arr, '繼續');
   } else if (n === 4) {
     var m = nearMonOut();
     if (!m) { demoGo(5); return; }
-    var mx = m.x, my = m.y - m.h / 2 - 21;
-    tutOpen('demo_mon', 'play', '打怪也會[掉落素材]', mx + 20, my - 127, 'above', [tutArrow(mx, my, mx + 70, my - 107, 0.25)]);
+    tutOpen('demo_mon', 'play', '打怪也會\n[掉落素材]', m.x + 280, m.y - 48, 'above', [tutArrow(m.x + 30, m.y - 24, m.x, m.y, 'left', m.y - 116)], '繼續');
   } else if (n === 5) {
     if (g.hidden) { demoGo(6); return; }
-    var gx = g.x + 4, gy = g.y - 46;
-    tutOpen('demo_goal', 'play', '[終點],抵達後就可以結算關卡了', gx + 56, gy - 124, 'above', [tutArrow(gx, gy, gx + 76, gy - 114, 0.25)]);
+    tutOpen('demo_goal', 'play', '[終點],抵達後就可以結算關卡了', g.x - 20, g.y - 260, 'above', [tutArrow(g.x + 8, g.y - 46, g.x, g.y, 'bottom', g.x + 3)], '繼續');
   } else if (n === 6) {
     var holes = spotHoles();
-    if (!holes.length) { demoEnd(); return; }
-    var ars = [];
-    holes.forEach(function (h, k) {
-      var st = L.sites[h.site], sx = st.sign[0] * TS + 20, sy = st.sign[1] * TS - 24;
-      if (solidAboveSign(st)) {
-        var sg = sx < 640 ? 1 : -1, tpx = sx + sg * 23, tpy = sy;
-        ars.push(tutArrow(tpx, tpy, tpx + sg * 127, tpy - 31, 0.2 * sg));
-      } else {
-        var dx = sx < 640 ? 70 : -70, ex = sx, ey = sy - 24 - 5;
-        ars.push(tutArrow(ex, ey, ex + dx, ey - (dx > 0 ? 107 : 117), dx > 0 ? -0.3 : 0.3));
-      }
-    });
+    if (!holes.length) { demoGo(7); return; }
     T.spot = { holes: holes, k: 0 }; T.fade6 = -1; T.pend6 = true; T.step = 'demo_sites'; T.scene = 'play'; T.bub = null; T.arrows = [];
-    T.sitesArrows = ars;
     snd('tut_spot');
+  } else if (n === 7) {
+    T.spot = null; T.fade6 = -1; T.pend6 = false;
+    tutOpen('demo_start', 'play', '開始遊玩吧!', 640, 290, 'above', [], '繼續');
   }
 }
 function demoEnd() {
   T.demo = 2; R.demo = false; T.ds = 0; T.spot = null; T.arrows = []; T.bub = null; T.stage = null; T.fade6 = -1; T.pend6 = false;
   clearKeys(); R.lastSnap = snap(); acc = 0;
 }
-// 演出 2 示範: 角色只在原地做動作(世界不模擬), 示範完回到起點原姿勢
+// 演出 2 示範(T 0.6~3.0): 角色只在原地做動作(世界不模擬), 示範完回到起點原姿勢
 function demoPose(cp) {
-  var S = snap(), pp = S.p, base = 0.85, gi = Math.floor((cp - base) / 0.9), tl = cp - base - gi * 0.9, u;
-  if (cp >= base && gi >= 0 && gi < 4) {
-    if (gi === 0) {
-      if (tl < 0.4) { pp.facing = -1; pp.pose = 'run'; pp.poseT = tl; pp.x += -20 * (tl / 0.4); }
-      else if (tl < 0.8) { pp.facing = 1; pp.pose = 'run'; pp.poseT = tl - 0.4; pp.x += -20 + 40 * ((tl - 0.4) / 0.4); }
-      else { pp.facing = 1; pp.x += 20 * (1 - (tl - 0.8) / 0.1); }
-    } else if (gi === 1) {
-      u = tl / 0.7;
+  var S = snap(), pp = S.p, tl, u;
+  if (cp >= 0.6 && cp < 3.0) {
+    if (cp < 1.2) {
+      tl = cp - 0.6;
+      if (tl < 0.25) { pp.facing = -1; pp.pose = 'run'; pp.poseT = tl; pp.x += -20 * (tl / 0.25); }
+      else if (tl < 0.5) { pp.facing = 1; pp.pose = 'run'; pp.poseT = tl - 0.25; pp.x += -20 + 40 * ((tl - 0.25) / 0.25); }
+      else { pp.facing = 1; pp.x += 20 * Math.max(0, 1 - (tl - 0.5) / 0.1); }
+    } else if (cp < 1.8) {
+      tl = cp - 1.2; u = tl / 0.5;
       if (u < 1) { pp.y -= 60 * 4 * u * (1 - u); pp.pose = u < 0.5 ? 'rise' : 'fall'; pp.poseT = tl; }
-    } else if (gi === 2) {
-      if (tl >= 0.1 && tl < 0.25) { pp.pose = 'slash'; pp.poseT = tl - 0.1; pp.sw = 0; }
-      else if (tl >= 0.45 && tl < 0.6) { pp.pose = 'slash'; pp.poseT = tl - 0.45; pp.sw = 1; }
-    } else if (tl < 0.6) {
-      pp.pose = 'dash'; pp.poseT = tl; pp.x += 40 * Math.sin(Math.PI * tl / 0.6);
+    } else if (cp < 2.4) {
+      tl = cp - 1.8;
+      if (tl >= 0.05 && tl < 0.2) { pp.pose = 'slash'; pp.poseT = tl - 0.05; pp.sw = 0; }
+      else if (tl >= 0.3 && tl < 0.45) { pp.pose = 'slash'; pp.poseT = tl - 0.3; pp.sw = 1; }
+    } else {
+      tl = cp - 2.4;
+      if (tl < 0.2) { pp.pose = 'dash'; pp.poseT = tl; pp.x += pp.facing * 40 * (tl / 0.2); }
+      else if (tl < 0.45) { pp.x += pp.facing * 40 * (1 - (tl - 0.2) / 0.25); }
     }
   }
   R.lastSnap = S;
 }
 // 演出 2 的音效: 跳 / 揮砍兩下 / 衝刺各在動作開始那一刻播一次(用旗標, 不用前後幀比較)
 function demoSounds(cp) {
-  var ev = [[0.85 + 0.9, 'jump'], [0.85 + 1.8 + 0.1, 'slash'], [0.85 + 1.8 + 0.45, 'slash'], [0.85 + 2.7, 'dash'], [5.95, 'tut_dock']];
+  var ev = [[1.2, 'jump'], [1.85, 'slash'], [2.1, 'slash'], [2.4, 'dash']];
   ev.forEach(function (e, i) {
     if (!T.demoSnd[i] && cp >= e[0]) { T.demoSnd[i] = true; snd(e[1]); }
   });
 }
 function demoTick(dt) {
-  var ds = T.ds, b = T.bub;
+  var ds = T.ds;
   T.dsT += dt;
   if (ds === 2) {
-    T.cpT = Math.min(CP_DUR, T.cpT + dt);
+    T.cpT = Math.min(CP_WAIT, T.cpT + dt);
     demoSounds(T.cpT);
     demoPose(T.cpT);
-    if (T.cpT >= CP_DUR) { R.lastSnap = snap(); demoGo(3); }
+    if (T.dockT !== null) {
+      T.dockT = Math.min(CP_DOCK, T.dockT + dt);
+      if (T.dockT >= 0.7 && !T.demoSnd.dock) { T.demoSnd.dock = true; snd('tut_dock'); }
+      if (T.dockT >= CP_DOCK) { R.lastSnap = snap(); demoGo(3); }
+    }
     return;
   }
   if (ds === 6) {
     if (T.fade6 >= 0) {
       T.fade6 += dt;
       if (T.spot) T.spot.k = Math.max(0, 1 - T.fade6 / 0.5);
-      if (T.fade6 >= 0.5) demoEnd();
+      if (T.fade6 >= 0.5) demoGo(7);
       return;
     }
     if (T.spot) T.spot.k = Math.min(1, T.dsT / 0.6);
-    // 聚光燈淡入 0.6 秒後開始打字: 泡泡提早 0.32 秒彈出
+    // 聚光燈淡入 0.6 秒後開始打字: 板子提早彈出
     if (T.pend6 && T.dsT >= 0.6 - TUT_POP) {
       T.pend6 = false;
-      tutOpen('demo_sites', 'play', '收集素材後可以[修復通道], 解鎖更多可以去的地方', 640, 250, 'above', T.sitesArrows);
+      tutOpen('demo_sites', 'play', '收集素材後可以[修復通道],\n解鎖更多可以去的地方', 390, 330, 'above', [], '繼續');
     }
-    b = T.bub;
-    if (b && b.outT === null && b.done && b.doneT >= 2.5) { T.fade6 = 0; tutSwap(function () { T.arrows = []; }); }
+  }
+}
+// 演出中的 Z(inputDown 在 R.demo 時只放行這一顆): 顯示完才接受
+function tutDemoZ() {
+  var ds = T.ds, b = T.bub;
+  if (ds === 2) {
+    if (T.cpT >= CP_WAIT && T.dockT === null) { T.dockT = 0; snd('tut_next'); }
     return;
   }
-  if (b && b.outT === null && b.done && b.doneT >= 1.5) tutSwap(function () { demoGo(ds + 1); });
+  if (!b || b.outT !== null || !b.done || !b.next) return;
+  if (ds === 6) {
+    if (T.fade6 >= 0) return;
+    snd('tut_next'); T.fade6 = 0; tutSwap(function () { T.arrows = []; });
+    return;
+  }
+  if (ds === 7) { snd('tut_go'); tutSwap(demoEnd); return; }
+  snd('tut_next');
+  tutSwap(function () { demoGo(ds + 1); });
 }
 
 // ---- 規則 2a: 第 1 關教學關的過關條件(迷霧外的地上素材撿完、迷霧外的怪打完)
@@ -514,10 +525,14 @@ function gateTarget() {
 }
 // 擋終點的箭頭與泡泡位置(目標會動, 每幀重算)
 function gateLayout(g) {
-  var r = g.ref, isPick = g.kind === 'pick', top = isPick ? r.y - 12 : r.y - r.h / 2, bot = isPick ? r.y + 12 : r.y + r.h / 2;
-  var tipX = r.x, tipY = top - 6 - (isPick ? 0 : 13), dir = r.x < 640 ? 1 : -1, tailX = tipX + 40 * dir, tailY = tipY - 110, by = tailY - 6, place = 'above';
-  if (by - 90 < 48) { tipY = bot + 6; tailY = tipY + 110; by = tailY + 6; place = 'below'; }
-  return { x: r.x, y: by, place: place, arrow: tutArrow(tipX, tipY, tailX, tailY, 0.25) };
+  var r = g.ref, isPick = g.kind === 'pick', cx = r.x, cy = r.y;
+  var top = isPick ? cy - 12 : cy - r.h / 2 - 13, bot = isPick ? cy + 12 : cy + r.h / 2;
+  var s = cx < 640 ? 1 : -1, tipY = top - 6, y = tipY - 140;
+  if (y - 90 < 46) {
+    tipY = bot + 6;
+    return { x: cx + 90 * s, y: tipY + 140, place: 'below', arrow: tutArrow(cx, tipY, cx, cy, 'top', cx + 50 * s) };
+  }
+  return { x: cx + 90 * s, y: y, place: 'above', arrow: tutArrow(cx, tipY, cx, cy, 'bottom', cx + 50 * s) };
 }
 function gateText(g) { return g.kind === 'pick' ? '先撿[素材]再結算關卡吧!' : '先打死[怪物]再結算關卡吧!'; }
 // 站在旗子上按 ↓: 回傳 true = 條件未達成, 擋下不過關
@@ -547,38 +562,36 @@ function gateTick() {
 function tutStartReplay() {
   if (T.off || T.rep) return;
   T.rep = 1; T.stage = 'replay'; T.lockMap = true; T.flightSeen = false; T.branch = null;
-  tutOpen('map_replay', 'map', '接著會不斷重演剛剛的通關歷程', 480, 570, 'below', [tutArrow(472, 423, 430, 565, -0.25)]);
+  tutOpen('map_replay', 'map', '接著會不斷重演剛剛的通關歷程', 470, 575, 'below', [tutArrow(466, 429, 480, 349, 'top', 374)]);
 }
 function tutToUpgrade() {
   T.stage = 'upgrade';
-  tutOpen('map_upgrade', 'map', '[升級所]可以解鎖新職業、提升角色能力', 330, 572, 'below', [tutArrow(243, 222, 330, 568, -0.3)], '繼續');
+  tutOpen('map_upgrade', 'map', '[升級所]可以解鎖新職業、提升角色能力', 305, 140, 'above', [tutArrow(250, 218, 150, 218, 'bottom', 447)], '繼續');
 }
 function tutToShop() {
   T.stage = 'shop';
-  tutOpen('map_shop', 'map', '[商店]可以購買裝置,裝置可以安裝在關卡中,提升素材產量', 330, 572, 'below', [tutArrow(243, 502, 340, 568, 0.25)], '繼續');
+  tutOpen('map_shop', 'map', '[商店]可以購買裝置,裝置可以\n安裝在關卡中,提升素材產量', 245, 576, 'below', [tutArrow(250, 498, 150, 498, 'top', 438)], '繼續');
 }
 function tutToSummary() {
   T.stage = 'summary'; T.arrows = []; T.bub = null; T.sum = { openT: 0, closing: false, closeT: 0.3, cards: 0 };
   snd('summary_open');
 }
+// 地圖 2: 判斷窗口 = 顯示完後 3.0 秒; 2a / 2b 都等 Z(顯示完才出現徽章)
 function replayTick() {
   var b = T.bub;
   if (!b || b.outT !== null) return;
-  if (b.step === 'map_slow') { if (b.done && b.doneT >= 2.5) tutSwap(tutToUpgrade); return; }
+  if (b.step === 'map_slow') return;
   if (T.branch === null) {
     if (T.flightSeen) T.branch = 'a';
     else if (b.done && b.doneT >= 3.0) {
       T.branch = 'b';
       tutSwap(function () {
-        tutOpen('map_slow', 'map', '但這次通關花比較多時間, [素材累積的比較慢], 可以考慮重刷一次關卡', 470, 575, 'below', [tutArrow(566, 402, 600, 572, 0.2)]);
+        tutOpen('map_slow', 'map', '但這次通關花比較多時間,\n[素材累積的比較慢],可以考慮重刷一次關卡', 470, 575, 'below', [tutArrow(543, 411, 540, 395, 'top', 592)], '繼續');
       });
       return;
     }
   }
-  if (T.branch === 'a') {
-    if (b.cont === null) { if (b.age - TUT_POP >= b.info.last) tutAddCont(', 源源不絕[累積素材]'); }
-    else if (b.done && b.doneT >= 2.0) tutSwap(tutToUpgrade);
-  }
+  if (T.branch === 'a' && b.cont === null && b.age - TUT_POP >= b.info.last) { b.next = '繼續'; tutAddCont(',\n源源不絕[累積素材]'); }
 }
 function sumTick(dt) {
   var m = T.sum;
@@ -599,7 +612,8 @@ function tutZ() {
     return;
   }
   if (!b || b.outT !== null || !b.done || !b.next) return;
-  if (s === 'upgrade') { snd('tut_next'); tutSwap(tutToShop); }
+  if (s === 'replay') { snd('tut_next'); tutSwap(tutToUpgrade); }
+  else if (s === 'upgrade') { snd('tut_next'); tutSwap(tutToShop); }
   else if (s === 'shop') { snd('tut_next'); tutSwap(tutToSummary); }
 }
 function tutStep(dt) {
@@ -611,11 +625,12 @@ function tutStep(dt) {
   if (T.stage === 'replay') replayTick();
   if (T.sum) sumTick(dt);
 }
-// 操作方式面板(第 1 關教學期間每幀畫): 演出 2 起才出現, 演出結束後固定在左上角
+// 操作方式面板(第 1 關教學期間每幀畫): 演出 2 起才出現, 演出 3 起固定在左上角
 function ctrlPanelVisible() { return tutL1() && (T.demo >= 2 || (T.demo === 1 && T.ds >= 2)); }
 function ctrlPanelState() {
-  var docked = T.demo >= 2;
-  return { T: docked ? CP_DUR : T.cpT, dur: CP_DUR, px: R.L.start.x, py: R.L.start.y, alpha: docked ? G.fPanel : 1, t: T.clk };
+  var p = R.L.start;
+  if (T.demo >= 2 || T.ds >= 3) return { T: CP_WAIT, waitZ: false, dockT: CP_DOCK, px: p.x, py: p.y, alpha: T.demo >= 2 ? G.fPanel : 1, t: T.clk };
+  return { T: T.cpT, waitZ: T.cpT >= CP_WAIT && T.dockT === null, dockT: T.dockT, px: p.x, py: p.y, alpha: 1, t: T.clk };
 }
 
 // ---------------------------------------------------------------- 物理
@@ -2219,7 +2234,8 @@ function inputDown(code) {
   else if (sc === 'upgrade') upgradeKey(code);
   else if (sc === 'shop') shopKey(code);
   else if (sc === 'play') {
-    if (R.state !== 'run' || R.demo) return;
+    if (R.state === 'run' && R.demo) { if (code === 'KeyZ') tutDemoZ(); return; }
+    if (R.state !== 'run') return;
     if (code === 'ArrowLeft') keys.left = true;
     else if (code === 'ArrowRight') keys.right = true;
     else if (code === 'ArrowUp') { keys.up = true; edge.jump = true; }
@@ -2619,7 +2635,7 @@ function renderPanel(c) {
     siteSel: L.sites.length ? P.siteSel : null, slots: G.slots[l].slice(), slotSel: P.slotSel,
     storeCount: storeTotal(),
     recordCls: rec ? rec.cls : null, recordTime: rec ? r1(rec.N / 60) : null, rates: rec ? rateOf(l, rec) : null, speedMul: rec ? speedMul(l) : 1,
-    newArea: !!rec && rec.ver < G.repairVer[l], stock: G.stock
+    newArea: !!rec && rec.ver < G.repairVer[l], stock: G.stock, hintOff: !T.off && T.stage === 'prep'
   });
   drawPreview(c, l);
   if (P.row === 0 && L.sites.length && !P.sub) {

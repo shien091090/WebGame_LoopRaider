@@ -1,6 +1,6 @@
 # 素材來源與授權
 
-`assets/` 裡每個檔各一列(72 列 = 65 個音效 + 7 首背景音樂; polish 第 2 輪新增 4 個音效, 標「第 2 輪新增」; polish 第 3 輪重做 `shockwave`、剪短 `slash`, 檔數不變, 用的仍是下表既有素材包; polish 第 5 輪新增 10 個教學音效、重做 `tutorial_done`, 標「第 5 輪」, 只多用了一個 Kenney 包 K-CA)。音效是從下列素材包剪輯、疊層後重新輸出的, 「來源」欄列出用到的原始檔。
+`assets/` 裡每個檔各一列(73 列 = 66 個音效 + 7 首背景音樂; polish 第 2 輪新增 4 個音效, 標「第 2 輪新增」; polish 第 3 輪重做 `shockwave`、剪短 `slash`, 檔數不變, 用的仍是下表既有素材包; polish 第 5 輪新增 10 個教學音效、重做 `tutorial_done`, 標「第 5 輪」, 只多用了一個 Kenney 包 K-CA; polish 第 6 輪新增 `tut_go`, 標「第 6 輪」, 用既有素材包 K-IF、K-MJ)。音效是從下列素材包剪輯、疊層後重新輸出的, 「來源」欄列出用到的原始檔。
 
 ## 素材包
 
@@ -80,6 +80,7 @@
 | sfx_shatter.mp3 | shatter(第 2 輪新增) | K-IM impactGlass_heavy_004、impactGlass_medium_001、impactGlass_heavy_000、impactGlass_light_002、impactGlass_light_004 | 五片玻璃錯開 0 / 0.03 / 0.09 / 0.17 / 0.26 秒, 後三片加速 1.12~1.3 倍、音量遞減 |
 | sfx_tut_pop.mp3 | tut_pop(第 5 輪新增) | K-IF drop_002 + maximize_008 | 兩層疊加(「啵」−3 dB 打頭) |
 | sfx_tut_type.mp3 | tut_type(第 5 輪新增) | K-IF tick_001 | 無(響度壓到 −30) |
+| sfx_tut_go.mp3 | tut_go(第 6 輪新增) | K-MJ jingles_SAX04 + K-IF maximize_006 | 薩克斯兩音上跳句(−3 → +6 半音)原速; 開頭墊上揚掃音(−10 dB)當立即起音 |
 | sfx_tut_next.mp3 | tut_next(第 5 輪新增) | K-RPG bookPlace3、bookFlip3 + K-IF click_005 | 三層疊加(翻頁 −4 dB、喀 −10 dB) |
 | sfx_tut_panel.mp3 | tut_panel(第 5 輪新增) | K-RPG bookOpen + K-CA card-fan-1 | 紙牌展開聲降速 0.85 倍當羊皮紙沙沙聲, 開頭墊翻開書(−2 dB) |
 | sfx_tut_dock.mp3 | tut_dock(第 5 輪新增) | K-RPG bookClose + K-IF click_003 | 疊輕喀(−10 dB) |

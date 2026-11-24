@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>banner-a 翠林突擊</title>
+<style>body{margin:0;overflow:hidden;background:#000}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="1680" height="720"></canvas>
+<script src="../game/art/art.js"></script>
+<script>
+// 橫幅 A: 翠林關卡的橫向舞台, 三職業由左往右衝, 劍士身後拖著重演殘影, 右側怪物迎面、素材噴出
+(function () {
+  var cv = document.getElementById('c'), ctx = cv.getContext('2d'), A = window.Art;
+  var BW = 1680, BH = 720, GY = 592, K = 3.4, i;
+  function at(x, y, k, fn) { ctx.save(); ctx.translate(x, y); ctx.scale(k, k); fn(); ctx.restore(); }
+  // 背景: 遊戲的翠林背景(純場景)橫向拉伸到 1680
+  ctx.save(); ctx.scale(BW / 1280, 1); A.drawBackground(ctx, { theme: 'forest', t: 3 }); ctx.restore();
+  // 地面: 翠林地形格放大 2 倍, 頂緣 y = 592
+  ctx.save(); ctx.scale(2, 2);
+  for (i = 0; i < 22; i++) A.drawGround(ctx, { x: i * 40 + 20, y: GY / 2 + 20, theme: 'forest', open: { n: true } });
+  ctx.restore();
+  // 影子
+  function shadow(x, rx) { ctx.save(); ctx.translate(x, GY + 2); ctx.scale(1, 0.18); ctx.beginPath(); ctx.arc(0, 0, rx, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fill(); ctx.restore(); }
+  var hy = GY - 18 * K; // 主角判定框中心
+  // 怪物(同一倍率): 衝鋒山豬、射手蜂、青蛙
+  shadow(1230, 70); shadow(1462, 50);
+  at(1230, GY - 16 * K, K, function () { A.drawBoar(ctx, { x: 0, y: 0, facing: -1, state: 'charge', flingDir: 0, hit: false, brood: false, t: 0.4 }); });
+  at(1360, 300, K, function () { A.drawShooterBee(ctx, { x: 0, y: 0, facing: -1, state: 'fly', flingDir: 0, hit: false, brood: false, t: 0.21 }); });
+  at(1462, GY - 14 * K, K, function () { A.drawFrog(ctx, { x: 0, y: 0, facing: -1, state: 'crouch', flingDir: 0, hit: false, brood: false }); });
+  // 噴出的素材(怪物掉落 / 地上拾取)
+  [['wood', 1110, 250, 56], ['crystal', 1240, 175, 62], ['stone', 1490, 230, 52], ['core', 1395, 450, 50]].forEach(function (m) {
+    var g = ctx.createRadialGradient(m[1], m[2], 2, m[1], m[2], m[3]);
+    g.addColorStop(0, 'rgba(255,250,210,0.55)'); g.addColorStop(1, 'rgba(255,250,210,0)');
+    ctx.fillStyle = g; ctx.fillRect(m[1] - m[3], m[2] - m[3], m[3] * 2, m[3] * 2);
+    A.icons.mat(ctx, m[0], m[1], m[2], m[3]);
+  });
+  // 主角三人: 炸彈工(投擲)、獵人(待機持弓)、劍士(揮砍), 劍士身後兩道重演殘影
+  shadow(610, 46); shadow(790, 46); shadow(1000, 46);
+  at(610, hy, K, function () { A.drawPlayer(ctx, { x: 0, y: 0, cls: 'bomber', facing: 1, pose: 'throw', poseT: 0.1 }); });
+  at(790, hy, K, function () { A.drawPlayer(ctx, { x: 0, y: 0, cls: 'hunter', facing: 1, pose: 'idle', poseT: 0 }); });
+  [[890, 0.16], [945, 0.3]].forEach(function (e) {
+    ctx.save(); ctx.globalAlpha = e[1];
+    at(e[0], hy, K, function () { A.drawPlayer(ctx, { x: 0, y: 0, cls: 'sword', facing: 1, pose: 'run', poseT: 0.2 }); });
+    ctx.restore();
+  });
+  at(1000, hy, K, function () { A.drawPlayer(ctx, { x: 0, y: 0, cls: 'sword', facing: 1, pose: 'slash', poseT: 0.05, swingIdx: 0 }); });
+  // 飛行物: 獵人的箭射向蜂、炸彈工的炸彈飛向山豬
+  at(1150, 330, K, function () { A.drawArrow(ctx, { x: 0, y: 0, angle: -0.12 }); });
+  at(830, 400, K, function () { A.drawBomb(ctx, { x: 0, y: 0, t: 0.3, radius: 0, danger: false }); });
+})();
+</script>
+</body>
+</html>

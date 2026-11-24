@@ -1,0 +1,1276 @@
+{
+  "canvas": {
+    "width": 1280,
+    "height": 720,
+    "maxWidth": 1680
+  },
+  "notes": [
+    "座標: 除註明為『左上角』者外, 所有 x, y 都是物件判定框的中心點, 單位 px, 以 1280x720 畫布為準; 關卡是不捲動的單畫面, 沒有鏡頭位移(RD 的畫面震動以 ctx.translate 整體平移, 美術不處理)。",
+    "時間類欄位單位一律為秒。『xxT』是事件開始後已過秒數, 搭配『xxDur』總長; 閒置(沒在播)時 xxT = xxDur(不等於起始值 0)。『t』是遊戲經過秒數, 用來畫循環動畫。『stateT』是進入目前行為狀態後經過的秒數。",
+    "職業代碼 cls: 'sword' 劍士、'hunter' 獵人、'bomber' 炸彈工; 三職業判定框都是 28x36(1 格高)。素材代碼 kind: 'wood' 木材、'stone' 石頭、'crystal' 水晶、'core' 魔核(魔核只有怪物會掉, 地上不會出現, drawPickup 不會收到 'core')。裝置代碼 type(全遊戲『道具』已改稱『裝置』, 代碼沿用舊的道具代碼, 只換名稱與畫法): 'bagWood' 聚木機關、'bagStone' 聚石機關、'bagCrystal' 聚晶機關、'coreLamp' 聚核機關、'glove' 拾遺機關、'horn' 驅獸機關、'heart' 巢心機關、'gear' 疾時機關。畫面上的字一律用新名稱與『裝置 / 裝置格 / 裝置倉庫 / 解鎖職業 / 已解鎖』, 不再出現『道具 / 道具格 / 背包 / 招募 / 已招募』與舊裝置名。",
+    "polish 第 2 輪介面改動(已套用, 留作對照), 美術沿用上一版 art.js 時逐項對過(改名的欄位不改會讀到不存在的值、悄悄退回預設): 【改名 / 換掉】drawBackpackPanel → drawDevicePanel(state 全換: slotNo, level, current, entries, sel; 舊的 items / where 不再傳); drawLevelPanel 的 bagCount → storeCount(意義改成『倉庫裡還沒安裝的裝置總座數』), shopLeft 刪除, row 由 0~3 改成 0~2(工程 / 裝置格 / 開始挑戰); drawGoal 的 cheerDur 0.6 → 1.4(過關動畫全長)。【新增欄位】drawLevelCard 加 devices(工程進度文字『工程 N/3』拿掉, repairedCount / siteCount 改用來決定木框彩度); drawCardOverlay 加 regions(修復灰幕); drawWorkshopCard 加 allDone; drawUpgradePage 加 unlockIdx、unlockT、unlockDur; drawResultPanel 加 oldRun。【新增函式】drawShopCard、drawDeathFx、drawClearIris。【行為改變】drawPausePanel 的 mode='map' 只畫『Esc 繼續』(拿掉下載遊玩紀錄); drawShopPanel 改疊在大地圖上; drawMapBackground 改畫營地 + 河 + 橋。上一輪已套用的舊名對照(time→crystal、soul→core、bagTime→bagCrystal、soulLamp→coreLamp、地形主題、drawGround open、drawFog clearP 等)維持不變。",
+    "素材組物件(stock、run、cost、rates、ratePerMin、totals 等)一律是 { wood, stone, crystal, core } 四個數字; cost 裡不需要的那種為 0, 美術只畫大於 0 的種類。凡是畫花費 cost 的函式都另收 stock(目前持有), 美術逐項比對 cost 與 stock, 不足的那一種素材數字變紅並加紅底『缺 N』小標(N = cost − stock), 動作鈕變灰劃掉; 足夠的照常畫(ui 方案 A 的語言)。",
+    "地形主題 theme: 'forest' 翠林谷地(圓: 圓角土台、苔緣)、'cliff' 風蝕高崖(尖: 斜切岩角、鋸齒岩層)、'mine' 地底礦坑(方: 直角木框、坑木襯牆)、'salt' 鹽原斷門(第 8 關, 白色鹽殼與砂岩斷柱, 粉紫暖色)、'lair' 巢穴室內(陰暗魔物巢, 帶紫色巢穴記號; 巢穴所屬主題另由 lairTheme 欄位給)。照 themes 方案 B: 地形不畫格線、相鄰實心格連成一整塊, 只在外露邊畫深色描邊; 外角依主題變圓角 / 斜切 / 直角。五種要一眼分得出, 縮到 0.125 倍靠輪廓與配色仍分得出。",
+    "受擊閃欄位 hit: true 表示這 0.1 秒內剛受到傷害(或打在盾 / 不在破綻的巨像上), 畫成閃白一下, 不放大。",
+    "一般怪物的 state 'flung' = 被擊飛中(水平飛出、不受重力), 要看得出是被打飛的(身體往飛行方向傾斜、速度線畫在框外飛行反方向至多 40px)。flingDir 為擊飛的水平飛行方向: 1 往右 / -1 往左, 不在擊飛中時為 0(上一輪美術只能從 facing 猜飛行方向, 本輪補上這個欄位, 擊飛中不要再用 facing 推)。刺藤花、落石蜥、巢母、巨像不會被擊飛, 沒有 'flung'。一般怪物函式都有 brood 欄位: true = 巢穴怪, 在本體框內加巢穴記號(背上發光紫紋), 輪廓與種類仍一眼看得出; 不改大小。",
+    "怪物框外子部件的方位帶(以怪物判定框上緣 top = y − 高/2 為準, 全部同時出現時互不重疊): 血條由 drawHpBar 畫在 top − 13 ~ top − 8; 暈眩 / 踉蹌 / 破綻的星星畫在 top − 36 ~ top − 18(血條上方); 擊飛速度線在框的左右外側; 預備投影由 drawTelegraph 畫在地上或怪與目標之間。怪物函式本身不畫血條。",
+    "預備動作一律由 drawTelegraph 投影到世界上(monsters 方案 B), 怪物函式只畫姿勢(蓄力、瞄準、盤旋、閃爍)。敵方投影一律紅色系; 巨像破綻 / 怪物破綻是黃色; 不用青色(青 = 水晶)與紫色(紫 = 巢穴記號)當敵方提示色。",
+    "繪製順序(關卡內, 由下到上): drawBackground → drawLairBack → 地形類(drawGround、drawSpike、drawCrackWall、drawWorksite、drawNestGate)→ drawTelegraph → drawPickup、drawChest、drawGoal → drawRangeRing → drawSkillRing → 怪物、巢母、drawColossus → drawHpBar(每隻怪各一次)、drawBossHpBar → drawPlayer → 飛行物(drawArrow、drawBomb、drawBeeShot、drawRockShot)、drawBossBeam、drawExplosion、drawShockwave、drawPoof、drawDropBit → drawFog → drawSiteSign → drawGoalPrompt → drawPopup、drawChainText → drawHud → drawItemNotice → drawCtrlPanel(第 1 關教學期間)→ drawTutorial → drawSoundIcon。迷霧蓋在區域內一切物件之上; 工程結構格不在任何迷霧矩形內, 所以不會被蓋; 工程牌畫在迷霧之後, 永遠看得到。**死亡動畫期間**(規則 3, 1.3 秒與之後的失敗面板): 世界照上面順序畫定格的那一幀但**不畫 drawPlayer、drawSkillRing、drawRangeRing、drawGoalPrompt、drawTutorial**, 畫完世界(drawSiteSign 之後)呼叫 drawDeathFx(它自己壓暗幕並畫角色), 再畫 drawHud → drawFailPanel(1.3 秒後; 第 1 關教學期間不畫, 改走重生)→ drawCtrlPanel(第 1 關教學期間)→ drawSoundIcon。**第 1 關教學重生期間**(spec 規則 3a: 死亡動畫 1.3 秒 → 停 0.4 秒持續以 t = 1.3 呼叫 drawDeathFx → 重生 1.6 秒): 重生這 1.6 秒世界畫重置後的新一趟(定格), 同樣不畫 drawPlayer、drawSkillRing、drawGoalPrompt, drawSiteSign 之後呼叫 drawRespawnFx(它自己畫承接的暗幕、碎片與角色), 再畫 drawHud → drawCtrlPanel → drawSoundIcon。**過關動畫期間**(規則 2, 1.4 秒與之後的結算面板): RD 以 ctx.translate(fx,fy) · scale(z) · translate(−fx,−fy) 放大畫定格的世界(drawBackground 到 drawChainText 為止, 跳過 drawGoalPrompt、drawSkillRing、drawRangeRing、drawTutorial; drawPlayer 用 pose 'cheer'、drawGoal 用 cheerT), 還原變換後呼叫 drawClearIris(畫布座標, 不受放大影響), 再畫 drawHud → drawResultPanel(1.4 秒後)→ drawSoundIcon。",
+    "大地圖縮圖(回放): RD 在關卡卡片內距卡片左上 (8,8) 處, 以 ctx.translate + ctx.scale(0.125) 重用關卡內的繪圖函式畫出 160x90 的縮圖並裁切在該區域內: drawBackground、drawLairBack、地形類、drawTelegraph、drawPickup、drawChest、drawGoal、所有怪物、巢母、drawColossus、drawBossHpBar、巢母的 drawHpBar(big=true)、drawPlayer、飛行物、drawBossBeam、爆炸、爆風擊退、擊倒煙、drawFog。縮圖**不畫**: 一般怪的 drawHpBar(縮完不到 1px)、drawDropBit、drawPopup、drawChainText、drawItemNotice、drawSiteSign、drawRangeRing、drawSkillRing、drawGoalPrompt、drawTutorial, 改由 drawFlyingMaterial 表現得到素材。地形、工程結構與迷霧畫目前的修復狀態, 怪物與巨像照錄影。縮到 0.125 倍後素材、怪物與工程結構若糊成一團, 美術可在 scale 小於 0.2 時改畫簡化的剪影 / 色塊(主角剩盾形 / 三角 / 圓三個記號、素材保留四種顏色可分、巢穴怪的紫色記號仍看得出); 迷霧在縮圖裡也要一眼看得出那塊被蓋住; 第 8 關縮圖要一眼看得出是最終關(粉紫天空 + 斷門 + 巨像剪影)。美術用 ctx.getTransform() 判斷目前縮放倍率。",
+    "關卡準備頁預覽: RD 在 (60,96) 以 ctx.scale(0.5) 重用關卡繪圖函式畫出 640x360 的靜態預覽(目前地形含工程修復狀態、迷霧、素材、工程牌、寶箱目前開關狀態、終點旗、怪物在出生點用第一個 state('walk' / 'fly' / 'crouch' / 'idle' / 'circle' / 'crawl')、hit=false、brood 照實際; 巢穴門已修時巢母畫在出生點 state 'walk'; 第 8 關畫巨像待機姿勢; 不畫玩家、不畫血條、不畫預備投影、不畫任何路線), 再疊 drawSiteHighlight。工程牌在預覽裡縮成 0.5 倍, 號碼仍要讀得出(號碼字級在 0.5 倍下至少 10px, 美術依縮放倍率自行放大)。修好工程時預覽上照常播 drawWorksite 的施工與 drawFog 的推開。",
+    "文字歸屬: 每個繪圖函式自己畫它面板 / 卡片 / 提示內的全部文字(含按鍵鍵帽), 數值由 state 傳入; 大地圖最下方 y=690~714 的一行操作提示『[↑][↓][←][→] 選擇  [Z] 確定  [Esc] 暫停  [M] 靜音』由 RD 呼叫 drawKeyLine 畫(polish 第 5 輪改用按鍵外觀; 左端 x=440; 新手教學地圖 2 到總結板關閉期間不畫)。新手教學的文字(泡泡、操作方式面板、總結板)由 drawTutorial / drawCtrlPanel / drawTutSummary 畫, 句子由 RD 以 state 傳入(總結板的四段文字固定, 由美術畫)。按鍵一律用 keycap B 按鍵外觀(扁平琺瑯徽章; 畫法同 drawKeyLine)嵌在句中, 不在句尾重複畫一顆(polish 第 5 輪, 見 spec「操作」末段)。死亡動畫、過關光圈本身沒有文字。開始畫面底下那行『按任意按鍵開始遊戲』由 drawTitle 畫; 結局卷軸上的文字與『按任意按鍵回到大地圖』由 drawEnding 畫。",
+    "大地圖固定版位(左上角, 由 RD 以 state 的 x, y 傳入; map-layout B『河對岸的營地』): 營地 升級所卡片 (62,150)、商店卡片 (62,430); 關卡卡片 第1關 (392,281)、第2關 (616,131)、第3關 (616,431)、第4關 (840,56)、第5關 (840,206)、第6關 (840,356)、第7關 (840,506)、第8關 (1064,281)。河中線 x = 330 + 10*sin(y/70)、寬 44(x 約 298~362), 橋在 y 337~361, 由 drawMapBackground 畫。卡片內: 縮圖 (8,8) 160x90、回放進度條 (8,99) 160x4、文字區 y+106~y+136、裝置格 (97,108) 與 (119,108) 各 21x24。底部: RD 操作提示 y 690~714(drawKeyLine; 上一輪的教學橫幅 (440,648,600,40) 已移除)。",
+    "資訊列四種素材圖示中心(素材飛行的終點): 木材 (36,20)、石頭 (206,20)、水晶 (376,20)、魔核 (546,20)。",
+    "聲音開關圖示: 36x36, 預設中心 (1250,62)(資訊列下方、遊玩區右上角), 所有畫面(開始畫面、大地圖、關卡、各面板、結局)都畫, 觸控模式(window.PVDX && PVDX.on)由 RD 不呼叫。**關卡內**(polish 第 4 輪): 位置依關卡由 RD 決定——第 4 關 (30,62)(左上角; 右上角會蓋住使用者擺在格 (31,1) 的石頭), 其他關 (1250,62); 與玩家 / 怪物 / 地上素材 / 飛行物重疊時 RD 傳 alpha 0.3(漸變), 見 drawSoundIcon。",
+    "觸控模式: 美術在 drawTitle 收 touch 欄位決定底下那行字; 其他函式不處理觸控(發布階段另做)。",
+    "**polish 第 3 輪介面改動**(美術、RD 沿用上一版 art.js / game.js 時逐項對過; 改名的欄位不改會讀到不存在的值、悄悄退回預設): 【改名 / 換掉】drawShockwave 的 radius → left、right、halfH(範圍從圓改成左右兩側的水平帶; 舊名 radius 不再傳)。【新增欄位】drawHpBar 加 shieldSide(使用者已在 polish 第 2 輪試玩期間先加進 art.js / game.js, 本輪寫進介面); drawBomb 加 radius、danger(炸彈會炸到自己, 飛行中畫範圍圈)。【行為改變】drawTelegraph 的端點一律由 RD 截在實心地形 / 平台邊緣, 區域型投影 RD 以 ctx.clip 扣掉實心格, 美術照給的範圍畫、不自行延伸; drawExplosion 同樣受 RD 的 clip; drawTitle 主視覺縮小上移(中心 (640,300)); drawClassSelect 標題改『選擇職業』、職業說明改兩行『特性 / 技能』; drawUpgradePage 的 stats 四項 maxLv 都是 3、名稱『移動速度』、職業卡說明改兩行、解鎖特效放大上限寫成 1.45 倍; drawWorkshopCard 的 allDone 改成四項強化都到 3 階; drawLevelPanel 工程列小標『修復工程』、角色名『藏寶處』、裝置格不畫『N 號格』; drawShopPanel 提示『Z 購買』; drawClearIris 收合時間 1.15~1.38、金星 1.25~1.4。技能名全遊戲改成『衝刺』(原衝刺斬)、『爆風擊退』(原震波), 工程角色名『藏寶處』(原寶區), 美術畫面上的字照新名。",
+    "**polish 第 4 輪介面改動**(美術、RD 沿用上一版 art.js / game.js 時逐項對過; 本輪沒有改名的欄位, 只有新增): 【新增欄位】drawPlayer 加 swingIdx(劍士揮砍取消間隔, 連按時刀光上下交替); drawTutorial 加 alpha(關卡內橫幅碰到角色 / 怪物 / 素材 / 飛行物時變淡); drawSoundIcon 加 alpha(同上), 且 x,y 在第 4 關改傳左上角 (30,62)。【行為改變】drawHawk 的 angle 在 return 時是實際移動方向(回升被平台擋住時會水平繞行, angle 為 0 或 π); drawTelegraph 的 dive 端點改用鷹判定框沿線第一次碰到實心格的位置(RD 算, 美術照畫); drawHud 的 maxHp 範圍更正為 3~6(上一輪漏改); drawTitle 的環道半徑 / 窗直徑照上一輪美術實作寫成約 200 / 70。【沒有新函式、沒有新音效事件】。關卡內第 0、1 列從本輪起可能有素材與怪物(使用者的 levels.js), 不再是空的保留帶。",
+    "**polish 第 5 輪介面改動**(美術、RD 沿用上一版 art.js / game.js 時逐項對過; 改名或作廢的欄位不改會讀到不存在的值、悄悄退回預設): 【整個改寫】drawTutorial: 新手教學全面重做, 舊 state 欄位全部作廢——舊 stage('1'~'15') → step(新的步驟代號字串)、舊 text / keys / pressed → bubble.text(句中按鍵寫成 {Z})、舊 bx / by / bw / bh(固定橫幅框)→ bubble.x / bubble.y / bubble.place(貼著目標的泡泡, 大小由文字決定)、舊 tip { x, y, dir }(小箭頭 36x24)→ arrows[i] { tipX, tipY, tailX, tailY, bend }(tut-arrow B 大箭頭, 至多 3 支)、doneT / doneDur 保留但總長 0.6 → 0.3、舊 alpha 刪除(新教學沒有關卡橫幅)、t 保留; 新增 arrowsT、bubble 內的 typeT / cont / contT / next / inT / outT、spot。舊的『羊皮紙橫幅』『階段 6 蓋在旗子提示上的完成特效』不再畫。【刪欄位】drawGoalPrompt 的 first(上一輪教學階段 6 用; 本輪 RD 不再傳, 美術不再做放大脈動)。【新增函式】drawCtrlPanel(操作方式面板, ctrl-panel A)、drawTutSummary(新手教學總結板, tut-summary B)、drawRespawnFx(第 1 關教學重生, respawn C)、drawKeyLine(一行嵌按鍵外觀的提示文字, keycap B; RD 畫大地圖底部提示列用, 美術各面板內部也用同一個畫法)。【行為改變】全遊戲按鍵提示改用 keycap B 按鍵外觀並嵌在句中(drawGoalPrompt、drawLevelPanel、drawDevicePanel、drawShopPanel、drawClassSelect、drawUpgradePage、drawResultPanel、drawFailPanel、drawPausePanel); drawLevelCard 的 recordTime 固定右對齊(教學箭頭要指它); drawGoal 拿掉『第一次過關前 0.6 秒教學完成特效』那段; 花費改照 cost-table.csv 後數字變大(工程石頭至多 400、解鎖木材至多 700、強化魔核至多 600、商店水晶至多 150), 裝置倉庫同種至多 8 座、總共至多 36 座。【新音效事件】tut_pop、tut_type、tut_next、tut_panel、tut_dock、tut_spot、respawn、respawn_land、summary_open、summary_card; tutorial_done 改成只在總結板關閉時播。",
+    "**polish 第 6 輪介面改動**(只動新手教學; 美術、RD 沿用上一版 art.js / game.js 時逐項對過, 改名或作廢的欄位不改會讀到不存在的值、悄悄退回預設): 【drawTutorial.arrows[i] 換欄位】舊 { tipX, tipY, tailX, tailY, bend } → 新 { tipX, tipY, aimX, aimY, side, along }: tailX / tailY 作廢(箭尾改由美術依提示板實際尺寸算, RD 只給 side = 從板子哪一邊出發、along = 沿那條邊的位置), bend 作廢(彎曲改由瞄準點 aimX / aimY 決定: 箭身是一條二次貝茲曲線、末端切線對準瞄準點; 上一版用 bend 推中點控制點, 造成箭身中段折角); tipX / tipY 保留(意義不變: 尖端, 已是目標外框外 6px)。箭頭寬 80 → 48、箭身半寬 7→16 改 5→10。拉弓改成只有尖端縮回(箭尾固定在板子上)。【drawTutorial.bubble 改畫法】欄位名不變(x, y, place, text, cont, typeT, contT, next, inT, outT), 但: 尾巴(小尖角)拿掉、字逐行置中、最小寬度 200 → 只有 next 存在時 140、句中 \\n 強制換行; inT 總長 0.32 → 0.25; 逐字時間 0.077 / 0.16 / 0.18 → 0.045 / 0.10 / 0.12。【drawTutorial.step 新增值】'demo_start'(演出 7「開始遊玩吧!」); 'demo_sites' 的 arrows 改成空陣列(演出 6 只用聚光燈)。【drawCtrlPanel 時間軸重訂】dur 作廢(RD 不再傳; 時間軸固定); T 由 0~6.25(含滑動落定)改成 0~3.2(只到示範完); 新增 waitZ(示範完等 Z 時畫「按 Z 繼續」徽章)、dockT(按 Z 後的滑動落定 0~0.95; null = 還沒開始滑)。舊的「T ≥ 6.25 = 已固定在左上角」→ 新的「dockT ≥ 0.95 = 已固定在左上角」。【drawLevelPanel 新增欄位】hintOff(true = 不畫最下方那行操作提示; 只有新手教學「準備 1」那一步傳 true)。【新音效事件】tut_go。【版位更正(上一輪美術回報的介面缺口)】drawLevelCard 卡片內的 2 格裝置格由 (123,108)、(146,108) 改成 (97,108)、(119,108)(各 21x24 不變): 舊座標和右對齊的通關秒數(右緣卡片內 x 168、中心 y 114)重疊, 上一輪美術已照新座標畫, 本輪把介面與 spec 改成一致; 秒數位置不動(教學地圖 2b 的箭頭指它)。",
+    "大地圖繪製順序(polish 第 5 輪寫明): drawMapBackground → drawMapLink → 每張卡(drawLevelCard → 縮圖 → drawCardOverlay; drawWorkshopCard、drawShopCard)→ drawFlyingMaterial → drawHud → RD 的底部提示列 drawKeyLine → drawTutorial(新手教學地圖 1~4)→ drawTutSummary(總結板, 自己畫全畫面暗幕)→ 面板類(drawShopPanel / drawUpgradePage / drawLevelPanel …)→ drawPausePanel → drawSoundIcon(總結板開著時 RD 不呼叫, 照共同守則『蓋滿全畫面的教學卡出現時先藏起來』)。準備頁: drawLevelPanel → 預覽 → drawSiteHighlight → (drawDevicePanel / drawClassSelect)→ drawTutorial(準備 1)→ drawSoundIcon。"
+  ],
+  "draw": [
+    {
+      "name": "drawTitle",
+      "state": [
+        "t",
+        "touch"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "notes": "開始畫面, 畫滿 1280x720, 照 title 方案 B『關卡之輪』並依使用者附註把中央三人換成倉庫。正中一棟大而顯眼的木造倉庫(大門敞開、門口素材堆)站在中央浮島上(倉庫主體約 290x240, 中心約 (640,300)); 背後一圈金色環道(半徑約 210, 圓心 (640,300))串起 8 枚圓形關卡窗(直徑約 72), 頂端那枚是第 8 關斷門(粉紫、門縫透光), 其餘依主題配色: 從頂端順時針 第1~3 關翠林、第4~5 關高崖、第6~7 關礦坑; 窗裡 hero 方案 A 的小角色不停重跑。動態: 光點沿環道每 4 秒繞一圈, 每 0.5 秒掃過一枚窗: 該窗亮起並噴出 3 顆素材(翠林 木材 / 高崖 石頭 / 礦坑 水晶 / 斷門 魔核, 圖示同 drawPickup)沿弧線落進倉庫大門, 倉庫屋頂一拍一拍彈一下(整棟縮放至多 1.04 倍, 底邊不動)、門口素材堆長高一點; 光點回到頂端時斷門窗閃一下, 下一圈開始, 素材堆回到原高、無接縫循環。所有週期性動態由 t 推出, 週期取 4 秒的因數。**不畫任何遊戲名稱或標題文字**。底下一行字中心 (640,668)、字級 20: touch=false 寫『按任意按鍵開始遊戲』、touch=true 寫『點擊畫面開始遊戲』, 以 1.2 秒週期明暗呼吸(alpha 0.55~1)。聲音開關圖示由 RD 另外疊在右上角, 畫面在 (1220~1280, 40~90) 不放重要元素。 **polish 第 3 輪(試玩回饋: 動畫離提示字太近)**: 整組主視覺比上一版縮小約 0.8 倍並上移, 中心由 (640,360) 改到 (640,300); 動畫所有元素(環道、窗、窗的光暈、噴出的素材弧線、倉庫彈跳)都限制在 y 54~552 之內, 與 y 668 那行字(上緣約 658)隔開 100px 以上; 底下那行字的位置、字級不變。 **polish 第 4 輪(寫回上一輪美術實作)**: 環道半徑約 200、關卡窗直徑約 70(原寫的 210 / 72 加上窗框與光暈會超出 y 54), 以「全部元素在 y 54~552 內」為準。"
+    },
+    {
+      "name": "drawBackground",
+      "state": [
+        "theme",
+        "t"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "notes": "關卡背景, 畫滿 1280x720, theme 為 'forest' | 'cliff' | 'mine' | 'salt'(巢穴室另由 drawLairBack 疊)。照 themes 方案 B 的三層遠景(翠林 圓丘與棒棒糖樹 / 高崖 尖塔與斜肩台地 / 礦坑 豎井與方形坑木框); salt 照 boss-stage 方案 C: 黃昏白色鹽原、天空由深紫漸到桃粉、遠景兩根斷裂的巨門石柱(缺口在畫面中央上方, 巨像由 drawColossus 另畫)。t 可畫緩慢的雲 / 粉塵飄動。"
+    },
+    {
+      "name": "drawMapBackground",
+      "state": [
+        "t"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "notes": "大地圖背景, 畫滿 1280x720(資訊列 y 0~40 之後由 drawHud 蓋上), 照 map-layout B『河對岸的營地』: **營地**(河左岸, x 0 ~ 河): 暖色石板地(深暖褐漸層 + 很淡的石板紋)、上下角落的房舍剪影(窗透暖光)、4 盞暖光燈柱、一條連接升級所卡 (62,150)、商店卡 (62,430) 與橋的小路(路寬約 22, 從 (150,286) 到 (150,430), 中間 y=349 分岔往右接橋)。**河**: 由上到下整條, 中線 x = 330 + 10*sin(y/70)、寬 44, 冷深藍(不用水晶青), 兩岸描邊, 水面幾道小波紋。**橋**: 木橋 y 337~361 跨河(兩端各伸出岸外 10px), 橋右端接一條小路到 (392,349)(第 1 關卡片左緣中點)。**關卡區**(河右岸到 x=1280): 冷色地圖紙(深青漸層 + 40px 淡格線 + 幾圈淡等高線), 右側 (1200,360) 附近一團很淡的黃昏粉紫光(斷門方向)。營地與關卡區一眼分得出是兩區(暖 / 冷 + 河)。卡片與連線另外畫, 背景不畫關卡連線、不放任何可互動的樣子。"
+    },
+    {
+      "name": "drawGround",
+      "state": [
+        "x",
+        "y",
+        "theme",
+        "open"
+      ],
+      "size": [
+        40,
+        40
+      ],
+      "notes": "實心地形一格。theme 見全域 notes(含 'lair')。open = { n, e, s, w } 四個布林, true = 那一側沒有相鄰實心格(外露邊): 只在外露邊畫深色描邊, 相鄰格之間不畫格線, 讓整塊連成一片; 兩個相鄰外露邊(例 n 且 e)交會的外角依主題畫圓角 / 斜切 / 直角木框; open.n = true 的格畫頂面(草 / 鹽殼 / 岩頂等)。舊欄位 top 等同 open.n。裂岩牆、工程結構、巢穴門不算實心鄰居(RD 計算 open 時只看 drawGround 格)。"
+    },
+    {
+      "name": "drawLairBack",
+      "state": [
+        "x",
+        "y",
+        "w",
+        "h",
+        "lairTheme"
+      ],
+      "size": [
+        640,
+        240
+      ],
+      "notes": "巢穴室的內部底色(不是實心), x,y 為該區左上角, w,h 為寬高(w 40~640、h 40~240, 皆為 40 的倍數)。畫在地形之前, 看得出是一個挖空的魔物巢; lairTheme 為 'forest' | 'cliff' | 'mine', 巢壁材質呼應該主題, 再帶紫色巢穴記號。只有第 3、5、7 關呼叫, 每關 1~2 次。"
+    },
+    {
+      "name": "drawSpike",
+      "state": [
+        "x",
+        "y",
+        "theme"
+      ],
+      "size": [
+        40,
+        40
+      ],
+      "notes": "一格尖刺, 判定為下半 40x20, 尖刺畫在下半。碰到扣 1 血(不即死), 外觀仍要看得出會痛; 材質配合 theme(翠林 荊棘、高崖 岩刺、礦坑 鐵釘)。"
+    },
+    {
+      "name": "drawCrackWall",
+      "state": [
+        "x",
+        "y",
+        "hp",
+        "theme"
+      ],
+      "size": [
+        40,
+        40
+      ],
+      "notes": "裂岩牆一格(實心), hp 3/2/1, 裂痕越來越多; 要和一般地面、堵塞隧道的亂石一眼分得出, 像是打得破。碎掉後 RD 不再畫並在該格中心播 drawPoof(size 'small')。"
+    },
+    {
+      "name": "drawWorksite",
+      "state": [
+        "x",
+        "y",
+        "kind",
+        "role",
+        "repaired",
+        "theme",
+        "end",
+        "bottom",
+        "buildT",
+        "buildDur",
+        "order"
+      ],
+      "size": [
+        40,
+        40
+      ],
+      "notes": "工程結構一格(斷橋、崩梯、堵塞隧道), 一處工程由多格組成, RD 逐格呼叫(含未修時看起來是空的格子)。kind: 'bridge' 斷橋 | 'stairs' 崩梯 | 'rubble' 堵塞隧道。role: 'shortcut' | 'treasure' | 'nest'(施工藍圖顏色: 三種角色各一色, 與 drawSiteSign 同色)。end: 這格是不是斷橋最左或最右格(bridge 才有意義)。bottom: 這格是不是崩梯最底一列(stairs 才有意義)。repaired=false(未修): bridge = end 格畫殘樁、其餘格畫空, 不是實心; stairs = bottom 格畫地上一堆碎石(不是實心), 其餘格畫空; rubble = 塞滿亂石的實心格(看起來打不壞, 沒有裂痕, 和裂岩牆一眼分得出)。**施工藍圖**: 未修時 bridge 與 stairs 的每一格(修好後會變實心的格)都畫 role 色的虛線方框輪廓(線畫在格內側 2px, 半透明); rubble 不畫藍圖。repaired=true: bridge = 實心橋面一格、stairs = 實心階梯一格(看得出是人工修的, 配合 theme)、rubble = 不畫。**施工動畫**: 剛修好時 RD 傳 buildT 0 → buildDur(0.6), order 0~1 為這格在施工順序中的位置(bridge = 離最近端格的距離比例, 由兩端往中間鋪; stairs = 由左到右的欄比例, 石階一欄欄落下; rubble = 全部 0, 亂石一起炸開): 這格在 buildT/buildDur >= order*0.7 後開始自己的 0.3 秒施工(石塊從上方 40px 落下定位 / 木板翻上 / 亂石炸成碎片, 碎片可飛出框外 24px), 之前照未修畫。閒置時 buildT = buildDur。"
+    },
+    {
+      "name": "drawNestGate",
+      "state": [
+        "x",
+        "y",
+        "open",
+        "lairTheme",
+        "buildT",
+        "buildDur"
+      ],
+      "size": [
+        80,
+        80
+      ],
+      "notes": "巢穴門, 2 格寬 x 2 格高, x,y 為整扇門的中心, 底邊貼地。open=false: 封印石門(實心, 看起來打不壞, 有爪痕與紫色魔物紋章, 看得出門後是魔物巢穴); open=true: 只剩門框(不擋路, 門框內淨空至少 64x72, 不要窄到看起來進不去)。剛修好時 buildT 0 → buildDur(0.6): 封印石板往下沉入地面(沉到底邊以下的部分不畫), 閒置 buildT = buildDur。lairTheme 讓門框材質呼應主題。施工藍圖: open=false 時沿門框畫 nest 色虛線。"
+    },
+    {
+      "name": "drawSiteSign",
+      "state": [
+        "x",
+        "y",
+        "role",
+        "num"
+      ],
+      "size": [
+        36,
+        48
+      ],
+      "notes": "工程牌, 底邊貼地, 不是實心。role: 'shortcut' 捷徑(直線箭頭或閃電)| 'treasure' 藏寶處(寶箱或星星)| 'nest' 巢穴(魔物爪印)。三種一眼分得出, 底色為該角色色(與藍圖同色)。num 1~3 為工程號碼, 畫在牌子頂端的圓釘上(與準備頁預覽的號碼釘一致, 字級至少 12px)。只在該工程未修時畫; 縮圖不畫。"
+    },
+    {
+      "name": "drawFog",
+      "state": [
+        "x",
+        "y",
+        "w",
+        "h",
+        "t",
+        "theme",
+        "clearP",
+        "ox",
+        "oy",
+        "maxR"
+      ],
+      "size": [
+        1280,
+        680
+      ],
+      "notes": "戰爭迷霧, 蓋住一塊還沒修好的區域。x,y 為矩形左上角, w,h 為寬高(w 80~1280、h 80~680, 皆為 40 的倍數)。矩形內完全看不見(不透明), 但看得出是一團迷霧而不是地形(緩慢流動, t 用來畫流動; 霧團形狀照 theme 的造型語言: 翠林圓團、高崖尖角、礦坑方塊); 邊緣可往內柔化至多 12px(柔邊畫在矩形內側, 不超出 x,y,w,h)。**推開**: clearP 0~1(平常 0), 修好時 RD 在 0.8 秒內從 0 推到 1, 到 1 後不再呼叫; 以 (ox, oy)(畫布座標, 工程結構中心, 可能在矩形外)為圓心、半徑 clearP*maxR 的圓內不畫霧, 圓邊外側畫一圈寬至多 16px 的亮霧邊(畫在矩形內)。maxR 由 RD 算好(圓心到該區所有矩形最遠角的距離)。同一區可能有 2 個矩形, 兩者用同一個圓心與 maxR, 接起來看不出接縫。縮圖與準備頁預覽同樣呼叫。"
+    },
+    {
+      "name": "drawTelegraph",
+      "state": [
+        "kind",
+        "x",
+        "y",
+        "x2",
+        "y2",
+        "w",
+        "h",
+        "r",
+        "pts",
+        "p",
+        "t"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "notes": "預備動作的世界投影(紅色系, 依 p 0~1 = 預備進度由淡變濃並加快脈動; t 畫流動)。各 kind 用到的欄位(其餘為 null): 'lane' 衝撞道: 從 (x, y)(y = 地面頂面)沿地面往 x2 延伸的紅斜紋帶, 高 24 貼地畫在頂面上方; 'aim' 瞄準線: (x,y) 到 (x2,y2) 的點線 + 終點準星(直徑 20); 'dive' 俯衝軌跡: (x,y) 到 (x2,y2) 的虛線 + 終點十字(直徑 24); 'column' 落柱: x 為中心, 從 y(頂)到 y2(地面頂面), 寬 w(落石蜥 32、巨拳 110), 落點地面畫一個寬 w 的紅橢圓; 'ring' 落點圈: 中心 (x, y)(y = 地面頂面)、寬 w 的貼地橢圓(高 w/4); 'blast' 爆炸圈: 中心 (x,y)、外緣半徑 r 的紅圈(線在圈內側); 'sweep' 掃區: 左上 (x,y)、寬 w 高 h 的貼地長方形; 'arc' 拋物軌跡: pts 為 3~12 個 [x,y] 點的折線, 畫成虛線(巢母石彈每條一次, RD 呼叫 3 次); 'crack' 裂縫: 中心 (x, y)(y = 地面頂面)、寬 w 的地面裂縫與冒煙; 'path' 光束路線: 從 (x, y) 到 (x2, y)(y = 掃描地面高度)的紅虛線 + 末端往 x2 方向的箭頭 + 起點準星。size 為最大範圍(光束路線可橫跨全畫面)。準備頁預覽不畫; 縮圖照畫。 **polish 第 3 輪(試玩 bug: 預告穿牆、懸空)**: 所有端點由 RD 截好再傳——lane 的 x2 = 預備時算出的最遠距離、前方第一面牆面、腳下平台邊緣三者最近者(與實際衝撞停下處一致); aim / dive 的 (x2,y2) 與 arc 的 pts 截在沿線第一個實心格; sweep 的 w 截在牆面; column 的 y2 為第一個實心頂面。區域型(blast、ring、crack)RD 在呼叫前以 ctx.save → 畫面矩形 + 所有實心格矩形 evenodd clip → 呼叫 → ctx.restore, 讓圈不畫進牆裡。美術**照給的端點與範圍畫, 不自行延伸、不加超出端點的箭頭或光暈**(箭頭、準星畫在端點以內); 縮圖重用時 RD 同樣傳截好的值。 **polish 第 4 輪**: kind 'dive'(俯衝軌跡)的終點 (x2,y2) 由 RD 以鷹的判定框(40x28)沿俯衝線前進、第一次碰到實心格的位置算出(不是只看中心點的射線), 與鷹實際停下處一致; 美術照給的終點畫, 終點記號外緣不超過終點。"
+    },
+    {
+      "name": "drawPickup",
+      "state": [
+        "x",
+        "y",
+        "kind",
+        "t"
+      ],
+      "size": [
+        24,
+        24
+      ],
+      "notes": "地上的素材, kind 只會是 'wood' | 'stone' | 'crystal'。照 materials 方案 C『立體寶物』: 木材 = 麻繩綁的三根原木堆、石頭 = 等角石方(三面明暗)→ 霧面不發光; 水晶 = 一大兩小的青色晶簇、魔核(只出現在其他函式)= 帶黃色獸眼的魂火球 → 自帶光暈。小於 15px(含縮圖)拿掉繩、年輪、星光與光暈, 只留輪廓與三面明暗。四種的形狀與顏色要一眼分得出, 並和資訊列、飛行素材、噴出素材粒、面板花費的圖示是同一個樣子。t 可畫輕微浮動或閃光(位移在框內)。"
+    },
+    {
+      "name": "drawDropBit",
+      "state": [
+        "x",
+        "y",
+        "kind",
+        "t",
+        "dur",
+        "vx",
+        "vy"
+      ],
+      "size": [
+        16,
+        16
+      ],
+      "notes": "打怪噴出的素材粒(四種 kind 都可能), 中心在 x,y(RD 算位置: 0~0.4 秒拋物線彈出、0.4~0.6 秒落地彈一下停住、0.6~1.0 秒被吸向玩家)。dur = 1.0。外觀為 drawPickup 同款圖示縮成 16px; 彈出時旋轉, 落地那一下壓扁(高度至多縮成 0.7 倍, 寬放大至 1.2 倍, 底邊不動), 吸回時拉長並在 (vx, vy)(目前速度, px/秒)反方向畫至多 16px 的淡拖尾(框外例外)。只在關卡內畫, 縮圖與預覽不畫。"
+    },
+    {
+      "name": "drawChest",
+      "state": [
+        "x",
+        "y",
+        "open"
+      ],
+      "size": [
+        40,
+        36
+      ],
+      "notes": "寶箱, 底邊貼地。open=false 關著(要醒目、想讓人去拿); open=true 開著的空箱(拿過了, 不醒目)。"
+    },
+    {
+      "name": "drawGoal",
+      "state": [
+        "x",
+        "y",
+        "reached",
+        "cheerT",
+        "cheerDur"
+      ],
+      "size": [
+        40,
+        80
+      ],
+      "notes": "終點旗, 高 2 格, 底邊貼地。reached=true: 玩家正站在旗子範圍內(旗子揚起)。cheerT 0 → cheerDur(1.4, 過關動畫全長; 上一輪是 0.6): 按 ↓ 過關後旗子大幅揮動, 0.72~0.86 秒(光圈回彈那一下)從旗頂往上噴金星至多 40px(框外例外); 閒置 cheerT = cheerDur。過關動畫時世界被 RD 放大 1.7 倍, 美術照原尺寸畫即可。(polish 第 5 輪: 第一次過關前 0.6 秒的教學完成特效已移除, 按 ↓ 那一刻 cheerT 就開始走。)"
+    },
+    {
+      "name": "drawGoalPrompt",
+      "state": [
+        "x",
+        "y",
+        "t"
+      ],
+      "size": [
+        200,
+        48
+      ],
+      "notes": "碰到終點旗時的提示『按 [↓] 完成關卡』(↓ 用 keycap B 按鍵外觀嵌在『按』與『完成關卡』之間, 字級至少 18; polish 第 5 輪), x,y 為終點旗判定框的上緣中點; 提示泡泡本體 200x48 的底邊在 y − 8(泡泡中心 (x, y − 32)), 下方小三角尖端在 (x, y − 2)。泡泡若會超出畫面左右, 美術把本體水平夾在 8~1272 內(尖端不動)。(polish 第 5 輪刪掉 first 欄位與它的放大脈動; 第一關教學的擋終點提示另由 drawTutorial 畫。)t 畫鍵帽輕微上下彈。縮圖不畫。"
+    },
+    {
+      "name": "drawPlayer",
+      "state": [
+        "x",
+        "y",
+        "cls",
+        "facing",
+        "pose",
+        "poseT",
+        "swingIdx",
+        "invuln",
+        "stealth",
+        "stealthT",
+        "stealthDur",
+        "unstealthT",
+        "unstealthDur"
+      ],
+      "size": [
+        28,
+        36
+      ],
+      "notes": "照 hero 方案 A『幾何剪影』: 劍士 = 倒梯形盾身配方盔、獵人 = 尖錐斗篷(兜帽陰影裡兩點亮眼)、炸彈工 = 圓桶身配大護目鏡; 扁平無陰影 + 白描邊; 三人都撐滿同一個 28x36 判定框, 只靠形狀、配色、手持武器分人。縮到 0.125 倍時只剩盾形 / 三角 / 圓三個記號。facing: 1 右 / -1 左。pose: 'idle' | 'run' | 'rise' | 'fall' | 'slash'(劍士揮砍)| 'dash'(衝刺)| 'throw'(炸彈工投彈)| 'wave'(炸彈工爆風擊退)| 'hurt' | 'cheer'(過關動畫 1.4 秒期間, 角色歡呼; 0.72~0.86 秒那段跳起一下, 由美術依 poseT 畫, 位移在框上方至多 16px)。poseT 為進入該動作後經過秒數。slash 的刀光畫在面向側框外 50x40 範圍內(貼著判定框側邊、與身體中心同高), 持續 0.15 秒; dash 的速度線畫在衝刺反方向框外至多 60px; wave 的爆風擊退另由 drawShockwave 畫, 這裡只畫姿勢。獵人自動射箭不改 pose(可在 poseT 無關的情況下畫弓一閃, 由美術決定)。invuln=true 時畫成閃爍。**潛行**: stealth=true 時整個角色半透明(約 0.35)+ 輪廓殘影微光, 一眼看出『現在無敵、可穿怪』; stealthT 0 → stealthDur(2.5)為已潛行秒數, 最後 0.5 秒輪廓閃爍預告即將解除; 非潛行時 stealthT = stealthDur。unstealthT 0 → unstealthDur(0.3): 解除瞬間的現身閃光(框外至多 12px), 閒置 unstealthT = unstealthDur。 **polish 第 4 輪: 劍士揮砍沒有冷卻**, 每按一次 Z 揮一次; 0.15 秒的 slash 動作還沒播完就再按時, RD 把 poseT 歸 0 重播。swingIdx: 0 或 1(整數, 從 0 起算), 每揮一刀在 0 / 1 間交替, 只在 pose='slash' 時有意義, 其他 pose 與非劍士一律傳 0; 美術讓 0 = 刀光由上往下斬、1 = 由下往上斬(兩種都在面向側框外 50x40 範圍內), 連按時看得出每一下都有出刀。"
+    },
+    {
+      "name": "drawSkillRing",
+      "state": [
+        "x",
+        "y",
+        "cls",
+        "cdT",
+        "cdDur",
+        "readyT",
+        "readyDur",
+        "castT",
+        "castDur",
+        "denyT",
+        "denyDur",
+        "stealthLeft",
+        "stealthDur"
+      ],
+      "size": [
+        56,
+        16
+      ],
+      "notes": "技能冷卻地面環(skill-cd 方案 A), x,y 為玩家判定框的底邊中點(腳下), 環是貼地的橢圓(外緣 56x16, 線寬 4, 線畫在外緣內側), 畫在玩家之前。只用圖形不寫數字。cdT 0 → cdDur(該技能本次冷卻總長, 已含升級倍率; 潛行時是解除後的冷卻): 深色軌道 + cls 的職業色由後方順時針長滿 cdT/cdDur, 軌道上每 1 秒一刻(刻數 = ceil(cdDur)); cdDur − cdT < 0.35 時填色轉金、軌道亮邊; 可用時 cdT = cdDur, 畫靜止的金環 + 環內淡金地光(不動)。readyT 0 → readyDur(0.5): 冷卻剛好完成的那一下, 環閃白轉金、向外擴一圈地面波紋(外緣至多 88x28)+ 6 顆金星往上飄至多 30px(框外例外); 閒置 readyT = readyDur。castT 0 → castDur(0.3): 施放瞬間金環向外脹開淡出(外緣至多 80x24), 閒置 castT = castDur。denyT 0 → denyDur(0.25): 冷卻中按 X, 環左右抖 ±3px 並閃紅, 閒置 denyT = denyDur。stealthLeft 0~stealthDur(2.5): 潛行中剩餘秒數, 大於 0 時環內多一圈虛線內環, 長度比例 = stealthLeft/stealthDur; 非潛行時 0。縮圖、預覽不畫。"
+    },
+    {
+      "name": "drawRangeRing",
+      "state": [
+        "x",
+        "y",
+        "radius"
+      ],
+      "size": [
+        520,
+        520
+      ],
+      "notes": "獵人自動射擊的射程圈, 中心為玩家中心, radius=260 為外緣半徑。細線、半透明, 不遮住圈內物件; 潛行中 RD 不呼叫(潛行不射擊)。只有獵人時 RD 才呼叫; 縮圖與預覽不畫。"
+    },
+    {
+      "name": "drawHpBar",
+      "state": [
+        "x",
+        "y",
+        "hp",
+        "maxHp",
+        "shield",
+        "maxShield",
+        "chip",
+        "chipT",
+        "chipDur",
+        "big",
+        "weak",
+        "shieldSide"
+      ],
+      "size": [
+        96,
+        7
+      ],
+      "notes": "怪物頭上常駐血條(monsters 方案 B: 圓角連續條, 長度跟最大耐久成正比)。x 為血條中心 x(= 怪物中心 x), y 為血條**底邊**(RD 傳 怪物框上緣 − 8)。寬 W = min(96, max(16, 6*(maxHp+maxShield)+4)), 高 5(big=true 時 7; 巢母用 big)。盾值段畫在 shieldSide 那一側(藍灰色, 寬 W*maxShield/(maxHp+maxShield)), 血量段在另一側(紅→綠依比例或固定紅, 由美術定, 但要和盾值段一眼分得開); 沒有盾的怪 shield = maxShield = 0。chip 為最近一次受傷前的 hp+shield 合計: chipT 0 → chipDur(0.4)期間, 剛扣掉的那段畫成白色並逐漸縮回目前值; 閒置 chipT = chipDur、chip = hp+shield。weak=true(巢母破綻中)時整條描黃邊。巨像用 drawBossHpBar, 不用這支。一般怪的血條縮圖不畫; 巢母在縮圖照畫。怪物被擊倒那一幀起 RD 不再呼叫(hp 不會以 0 傳進來); 美術不必處理 hp=0。 **shieldSide**(選填, 使用者在 polish 第 2 輪試玩期間已先加進 art.js 與 game.js, 本輪正式寫進介面): −1 = 盾值段在左、血量段在右(預設, 沒傳或其他值都當 −1); 1 = 盾值段在右、血量段在左。RD 對盾兵傳 facing > 0 ? 1 : −1(盾牌在哪側, 盾值段就在哪側), 其他怪傳 −1。剛扣段(chip)的白色縮回方向跟著鏡像: 從被扣的那一段的內側往外縮。"
+    },
+    {
+      "name": "drawBoar",
+      "state": [
+        "x",
+        "y",
+        "facing",
+        "state",
+        "flingDir",
+        "hit",
+        "brood",
+        "t"
+      ],
+      "size": [
+        48,
+        32
+      ],
+      "notes": "野豬(翠林), 底邊貼地。state: 'walk' | 'windup'(預備 0.5 秒, 刨地低頭, 看得出要衝了)| 'charge' | 'stun'(暈眩 1 秒, 星星在血條上方帶 top−36~top−18)| 'flung'。造型照 monsters 方案 B(圓潤 Q 版、上亮下暗漸層、白眼紅瞳、不描邊), 配色呼應翠林。"
+    },
+    {
+      "name": "drawFrog",
+      "state": [
+        "x",
+        "y",
+        "facing",
+        "state",
+        "flingDir",
+        "hit",
+        "brood"
+      ],
+      "size": [
+        32,
+        28
+      ],
+      "notes": "跳蛙(翠林), 站地時底邊貼地。state: 'crouch'(蹲著等下一跳)| 'jump'(空中)| 'flung'。"
+    },
+    {
+      "name": "drawShooterBee",
+      "state": [
+        "x",
+        "y",
+        "facing",
+        "state",
+        "flingDir",
+        "hit",
+        "brood",
+        "t"
+      ],
+      "size": [
+        32,
+        32
+      ],
+      "notes": "射手蜂(翠林), 空中。state: 'fly' | 'aim'(射擊前 0.4 秒, 尾針後收、發光)| 'flung'。上下飄的位移已含在 x,y。被擊倒後 RD 不再呼叫(也不再射擊)。"
+    },
+    {
+      "name": "drawThorn",
+      "state": [
+        "x",
+        "y",
+        "facing",
+        "state",
+        "stateT",
+        "hit",
+        "brood",
+        "t"
+      ],
+      "size": [
+        40,
+        48
+      ],
+      "notes": "刺藤花(翠林), 扎根在地上不動, 底邊貼地; facing 為藤鞭朝向。state: 'idle'(花苞微微擺動)| 'windup'(預備 0.6 秒, 藤鞭往後拉、花瓣張開)| 'whip'(橫掃 0.3 秒: 藤鞭從身體甩到面向側框外 140px、貼地高 40 的範圍內, stateT/0.3 為甩出進度; 這段畫到框外屬例外)| 'recover'(收回 1.2 秒, 藤鞭垂軟)。不會被擊飛。"
+    },
+    {
+      "name": "drawRam",
+      "state": [
+        "x",
+        "y",
+        "facing",
+        "state",
+        "flingDir",
+        "hit",
+        "brood",
+        "t"
+      ],
+      "size": [
+        44,
+        36
+      ],
+      "notes": "岩角羊(高崖), 底邊貼地, 大彎角在面向側。state: 'walk' | 'windup'(預備 0.6 秒, 低頭、後蹄刨地)| 'butt'(頂撞衝刺)| 'stagger'(踉蹌 0.8 秒, 星星在血條上方帶)| 'flung'。配色呼應高崖(冷灰、白羊毛)。"
+    },
+    {
+      "name": "drawHawk",
+      "state": [
+        "x",
+        "y",
+        "facing",
+        "state",
+        "flingDir",
+        "angle",
+        "hit",
+        "brood",
+        "t"
+      ],
+      "size": [
+        40,
+        28
+      ],
+      "notes": "俯衝鷹(高崖), 空中。state: 'circle'(盤旋, 翅膀展開拍動)| 'hover'(俯衝前懸停 0.7 秒, 翅膀高舉、盯住下方)| 'dive'(俯衝: 翅膀收攏成箭形, 身體朝 angle 方向; angle 為飛行方向弧度, 0 朝右、順時針為正)| 'return'(飛回出生高度, 1.0 秒內不再俯衝; polish 第 4 輪: 往上被實心格擋住時改水平繞行)| 'flung'。angle 只在 dive / return 有意義, 其餘為 0; return 時 angle = 這一幀的實際移動方向(往上 −π/2、往右 0、往左 π), 美術讓身體朝 angle 方向。**判定框任何時刻都不與實心格重疊**(polish 第 3 輪 bug 鷹穿牆, 由 RD 保證), 美術不必處理穿牆。"
+    },
+    {
+      "name": "drawLizard",
+      "state": [
+        "x",
+        "y",
+        "facing",
+        "state",
+        "hit",
+        "brood",
+        "t"
+      ],
+      "size": [
+        36,
+        24
+      ],
+      "notes": "落石蜥(高崖), **倒掛**在天花板下(判定框上緣貼天花板底, 肚子朝下)。state: 'crawl'(沿天花板爬)| 'windup'(預備 0.5 秒, 用尾巴捲起一顆石頭)| 'throw'(丟下的那 0.2 秒)。不會被擊飛。落下的石頭由 drawRockShot 畫。"
+    },
+    {
+      "name": "drawRockShot",
+      "state": [
+        "x",
+        "y",
+        "t",
+        "kind"
+      ],
+      "size": [
+        20,
+        20
+      ],
+      "notes": "敵方投擲的石頭: kind 'lizard'(落石蜥落石)| 'spit'(高崖巢母石彈)。要和玩家的炸彈一眼分得出(炸彈有引信火花, 石頭沒有、帶紅色危險描邊)。t 為丟出後經過秒數(可畫旋轉)。碰到地形碎掉時 RD 播 drawPoof(size 'small')。"
+    },
+    {
+      "name": "drawShieldman",
+      "state": [
+        "x",
+        "y",
+        "facing",
+        "state",
+        "flingDir",
+        "hit",
+        "brood",
+        "t",
+        "hasShield",
+        "breakT",
+        "breakDur"
+      ],
+      "size": [
+        32,
+        40
+      ],
+      "notes": "盾兵(礦坑), 底邊貼地。hasShield=true: 盾牌在面向側(畫在框內), 一眼看出哪一側有盾; hasShield=false: 盾已破, 外觀明顯不同(空手、身上露出破綻色、盾的殘把手), 『有盾 / 盾已破』兩種一眼分得出。state: 'walk' | 'block'(剛擋下攻擊的 0.2 秒, 盾牌閃一下; 只在 hasShield=true 時出現)| 'flung'。breakT 0 → breakDur(0.4): 盾碎的瞬間, 盾的碎片往面向側噴開(框外至多 24px), 閒置 breakT = breakDur。"
+    },
+    {
+      "name": "drawBeetle",
+      "state": [
+        "x",
+        "y",
+        "facing",
+        "state",
+        "flingDir",
+        "fuseT",
+        "fuseDur",
+        "hit",
+        "brood",
+        "t"
+      ],
+      "size": [
+        32,
+        24
+      ],
+      "notes": "爆炸甲蟲(礦坑), 底邊貼地(擊飛中在空中)。state: 'crawl' | 'fuse'(貼近玩家後停下閃爍 0.8 秒, 越接近 fuseDur 閃得越快、身體膨脹至多 1.15 倍、以中心為準屬框外例外)| 'flung'。fuseT 0 → fuseDur(0.8), 非 fuse 狀態時 fuseT = fuseDur。爆炸本身由 drawExplosion(kind 'beetle')畫。"
+    },
+    {
+      "name": "drawBat",
+      "state": [
+        "x",
+        "y",
+        "facing",
+        "state",
+        "flingDir",
+        "hit",
+        "brood",
+        "t"
+      ],
+      "size": [
+        24,
+        20
+      ],
+      "notes": "蝙蝠(礦坑), 一群 3 隻各自呼叫一次。state: 'fly'(繞圈拍翅)| 'flung'。每隻各自有血條(drawHpBar)。"
+    },
+    {
+      "name": "drawBroodmother",
+      "state": [
+        "x",
+        "y",
+        "kind",
+        "facing",
+        "state",
+        "stateT",
+        "stateDur",
+        "hit",
+        "t"
+      ],
+      "size": [
+        64,
+        56
+      ],
+      "notes": "巢母(三主題各一), 底邊貼地, 一眼看得出比一般怪大很多、是這座巢穴的主人, 並帶巢穴記號(背上發光紫紋)。kind: 'forest' 翠林『巨牙獸母』(巨大野獸、獠牙)| 'cliff' 高崖『崖蜥母』(巨型岩蜥、背上岩刺)| 'mine' 礦坑『鑽地甲后』(巨型甲蟲、鑽頭狀角)。facing: 1 右 / -1 左。state 依 kind: forest = 'walk' | 'windup'(0.8 秒)| 'charge' | 'stun'(1.5 秒); cliff = 'walk' | 'windup'(0.7 秒, 立起)| 'spit'(噴石 0.2 秒)| 'pant'(喘氣 1.5 秒); mine = 'walk' | 'burrow'(0.6 秒, 由 stateT/stateDur 決定沉入地面的比例, 地面以下的部分不畫)| 'under'(在地下, 只畫地面上一團土堆, 判定不在)| 'erupt'(竄出 0.2 秒, 由下往上冒出)| 'stuck'(卡在地上 1.5 秒)。stateT 為進入狀態後秒數、stateDur 為該狀態總長(walk 時為 0 且 stateT 照走)。**破綻狀態**(stun / pant / stuck)時身上弱點轉黃發光 + 星星畫在血條上方帶 top−36~top−18, 看得出這時打它最划算。血條由 drawHpBar(big=true)畫。"
+    },
+    {
+      "name": "drawColossus",
+      "state": [
+        "hx",
+        "hy",
+        "phase",
+        "eye",
+        "lid",
+        "split",
+        "weak",
+        "angry",
+        "lf",
+        "rf",
+        "blocks",
+        "plFall",
+        "roar",
+        "steam",
+        "hit",
+        "ko",
+        "koT",
+        "koDur",
+        "t"
+      ],
+      "size": [
+        760,
+        560
+      ],
+      "notes": "最終 Boss『守門巨像』(final-boss 方案 B), 懸在斷門缺口正上方、左右對稱的風蝕砂岩機關; 動作一格一格喀喀移動再精準停頓(位置由 RD 以分段緩動算好傳入)。敵方符文與眼睛一律紅, 只有破綻部位轉黃。**頭**: 中心 (hx, hy), 判定 200x160。phase 1 = 完整(石冠 + 雙肩甲); 2 = 肩甲已噴飛、臉上紅色裂縫; 3 = 頭殼裂成上下兩半, split 0~1 為分開程度(1 時上下各離中心 44px), 中間露出發光的核心眼(判定 90x90, 中心 (hx, hy))。eye 0~1 = 大眼聚光程度(光束預備); lid 0~1 = 眼皮半闔(過熱)。**拳**: lf / rf 各為 { x, y, rot(弧度), show, stuck }, 中心 (x,y)、判定 110x100、指節朝下, show=false 不畫(第 3 階段拳已碎); stuck=true 時拳卡在地上(底部埋進落點 10px, 冒碎石)。**浮石**: blocks 為 null 或長度 4 的陣列, 每項 { x, y, show, falling }(第 3 階段的 4 顆浮石, 每顆 70x60; falling=true 時畫下落的速度線)。weak: null | 'fist'(卡住的那隻拳側面符文轉黃)| 'seam'(額頭裂縫轉黃 + 冒蒸氣)| 'core'(核心眼整顆轉黃): 破綻部位發黃光 + 閃星, 和巢母破綻是同一種黃。angry: 戰鬥中 true(眼睛紅光較亮), 待機時 false。plFall 0~1: 第 1→2 階段肩甲噴飛落到兩側的進度(肩甲可飛到框外)。roar 0~1: 換階段時的震吼(整體震動 ±4px + 符文閃紅)。steam 0~1: 過熱冒煙量。ko=true 時 koT 0 → koDur(1.5): 崩解(裂成碎塊往下散落、逐漸透明), ko=false 時 koT = koDur。size 為整體最大外接框(以 (640, 300) 為中心), 碎塊與肩甲可飛出框外。縮圖照畫(scale<0.2 時可畫成剪影)。"
+    },
+    {
+      "name": "drawBossBeam",
+      "state": [
+        "x1",
+        "y1",
+        "x2",
+        "y2",
+        "w",
+        "t"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "notes": "巨像的大眼光束, 從眼睛 (x1, y1) 射到 (x2, y2)(RD 已算好被第一個實心格擋住的終點), 判定寬 w=48(光柱外緣; 光暈可再往外 12px)。終點畫灼燒火花與鹽痕。t 畫流動。"
+    },
+    {
+      "name": "drawBossHpBar",
+      "state": [
+        "x",
+        "y",
+        "hp",
+        "maxHp",
+        "marks",
+        "chip",
+        "chipT",
+        "chipDur",
+        "weak"
+      ],
+      "size": [
+        360,
+        12
+      ],
+      "notes": "巨像頭上血條, x,y 為血條中心(RD 傳 x = hx, y = 頭判定上緣 − 20; 第 3 階段頭殼分開時再往上 44*split), 寬 360、高 12, 圓角連續條(monsters 方案 B 放大)。每 1 HP 一道淡刻度; marks 為換階段門檻陣列 [30, 15], 在對應位置畫白粗刻度。chip / chipT / chipDur(0.4)同 drawHpBar。weak=true(破綻中)整條轉黃描邊。縮圖照畫。**巨像血量歸 0 那一幀起(崩解演出、旗子落下、之後回放的擊倒之後)RD 不再呼叫**(polish 第 1 輪 bug: 死後留一條全黑血條); hp 只會是 1~45。"
+    },
+    {
+      "name": "drawBeeShot",
+      "state": [
+        "x",
+        "y"
+      ],
+      "size": [
+        12,
+        12
+      ],
+      "notes": "射手蜂的蜂彈, 敵方子彈, 要和玩家的箭一眼分得出。"
+    },
+    {
+      "name": "drawArrow",
+      "state": [
+        "x",
+        "y",
+        "angle"
+      ],
+      "size": [
+        24,
+        6
+      ],
+      "notes": "獵人的箭(只有自動射擊), angle 為飛行方向(弧度, 0 朝右、順時針為正), 中心在 x,y。"
+    },
+    {
+      "name": "drawBomb",
+      "state": [
+        "x",
+        "y",
+        "t",
+        "radius",
+        "danger"
+      ],
+      "size": [
+        128,
+        128
+      ],
+      "notes": "炸彈工的炸彈(本體約 16x16), t 為丟出後經過秒數(引信火花、旋轉)。**polish 第 3 輪: 炸彈會炸到自己**, 飛行中以炸彈中心為圓心畫**爆炸範圍圈**: radius = 60(爆炸判定外緣半徑, 圈線畫在 radius 內側, 線寬約 2), danger=false 時畫淡暖白虛線圈(不搶戲, 約 0.35 不透明), danger=true(玩家判定框此刻與這個圈相交, 由 RD 每幀算)時圈轉紅、加一層極淡紅面並以約 0.25 秒週期閃爍——一眼看出「現在炸開會打到自己」。size 128x128 為範圍圈的外框(含線寬), 本體仍是 16x16。圈不畫進實心格: RD 呼叫前同 drawTelegraph 設 evenodd clip。縮圖不畫範圍圈(縮圖重用時 RD 傳 radius = 0)。"
+    },
+    {
+      "name": "drawExplosion",
+      "state": [
+        "x",
+        "y",
+        "t",
+        "dur",
+        "radius",
+        "kind"
+      ],
+      "size": [
+        140,
+        140
+      ],
+      "notes": "爆炸, 中心為爆點。kind 'bomb'(炸彈, radius 60, dur 0.4, 橘火球)| 'beetle'(甲蟲自爆, radius 70, dur 0.4, 帶青紫色甲殼碎片, 和炸彈看得出不同)。radius 為判定外緣半徑; t 從 0 走到 dur, 由小擴到外緣並淡出, 播完 RD 不再呼叫。 polish 第 3 輪: 爆炸判定被實心格擋住(爆心到目標中心連線穿過實心格就不受傷), RD 呼叫前同 drawTelegraph 設 evenodd clip, 火光不畫進牆裡; 炸彈的外緣仍剛好到 radius(60), 讓玩家對照自己有沒有在範圍內(炸到自己時另由 drawPlayer 的 hurt 表現)。"
+    },
+    {
+      "name": "drawShockwave",
+      "state": [
+        "x",
+        "y",
+        "t",
+        "dur",
+        "left",
+        "right",
+        "halfH"
+      ],
+      "size": [
+        260,
+        80
+      ],
+      "notes": "炸彈工技能『爆風擊退』(原震波; polish 第 3 輪範圍從圓改成只往左右兩側的水平帶)。x, y = 玩家中心(施放當下); left, right = 帶的左端與右端 x(畫布座標, RD 已截在兩側第一面牆的牆面, x − 130 ≤ left ≤ x、x ≤ right ≤ x + 130); halfH = 40(帶的上下半高, 帶 = y − halfH ~ y + halfH)。以上都是判定的**外緣**, 特效不得超出這個矩形(left ~ right、y ± halfH)。t 從 0 走到 dur(0.4): 從玩家身側同時往左、往右各推出一道爆風(弧形前緣 + 往外的速度線 / 小箭頭 + 極淡暖色面), 前緣在 t = dur 時剛好到 left / right 並淡出; 兩道爆風的高度都在帶內, 上下不畫擴散。一側被牆截短(left 或 right 很靠近 x)時那一側前緣撞在牆面上壓扁一下(在帶內)。要和炸彈爆炸看得出不同(往兩側推的風, 不是火球, 也不是圓環)。size 260x80 為最大範圍(左右各 130、上下各 40)。播完 RD 不再呼叫。縮圖照畫(縮放後只剩兩道短線即可)。"
+    },
+    {
+      "name": "drawPoof",
+      "state": [
+        "x",
+        "y",
+        "t",
+        "dur",
+        "size"
+      ],
+      "size": [
+        48,
+        48
+      ],
+      "notes": "一次性煙霧 / 碎屑: 怪物倒下、裂岩牆碎、石頭碎。t 從 0 走到 dur(0.5)。size: 'small'(一般, 48x48)| 'big'(巢母倒下, 畫到 96x96)| 'huge'(巨像崩解, 畫到 320x320); 中心不變, big / huge 屬框外例外。"
+    },
+    {
+      "name": "drawPopup",
+      "state": [
+        "x",
+        "y",
+        "t",
+        "dur",
+        "kind",
+        "value"
+      ],
+      "size": [
+        56,
+        24
+      ],
+      "notes": "關卡內得到素材時的浮字『+value』加 kind 素材小圖示(四種 kind 都可能; 只在關卡內畫, 縮圖與預覽不畫)。x,y 為起點中心。value 為 1~60 的整數。t 從 0 走到 dur(0.8), 美術自行上移 30px 並淡出(上移部分畫在框外上方, 屬預期)。RD 把同種 0.2 秒內的合併成一個, 多種同時出現時每種一次並錯開 y。"
+    },
+    {
+      "name": "drawChainText",
+      "state": [
+        "x",
+        "y",
+        "n",
+        "t",
+        "dur"
+      ],
+      "size": [
+        120,
+        32
+      ],
+      "notes": "連鎖字『n 連鎖』, n 為 2~20 的整數, 只在關卡內畫。t 從 0 走到 dur(0.8), 可彈一下再上移淡出(整塊字放大至多 1.3 倍、上移 30px, 都在框外屬預期)。"
+    },
+    {
+      "name": "drawItemIcon",
+      "state": [
+        "x",
+        "y",
+        "type",
+        "size"
+      ],
+      "size": [
+        32,
+        32
+      ],
+      "notes": "裝置圖示(函式名沿用), 中心在 x,y; size 為圖示邊長 16~150(卡片裝置格 17、倉庫清單 34、準備頁裝置格 40、商店列 40、結算 32、倉庫右預覽 150)。照 devices 方案 C『嵌牆圓盤機關』: 每座裝置是一塊嵌在牆上的方石座(四角鉚釘)+ 一圈外環 + 中心一個大符號; 外環顏色分種類: 聚木 / 聚石 / 聚晶 / 聚核 = 該素材色環 + 四個向內凹口(『聚』), 中心放該素材圖示(同 drawPickup); 拾遺 = 金環 + 磁鐵; 驅獸 = 橘環 + 號角; 巢心 = 紫環(發光)+ 金邊紫心, 明顯比其他珍貴; 疾時 = 銅色齒環 + 白色 ▶▶。size 小於 24 時拿掉鉚釘與細節, 只留『色環 + 符號』仍一眼可讀。圖示畫在框內(巢心的光暈至多外擴 4px)。裝置倉庫、準備頁裝置格、卡片裝置格、商店、獲得提示、結算面板共用。"
+    },
+    {
+      "name": "drawItemNotice",
+      "state": [
+        "type",
+        "t",
+        "dur"
+      ],
+      "size": [
+        400,
+        44
+      ],
+      "notes": "打開寶箱或首殺巢母時的提示, 固定左上 (440,100)(在教學橫幅 y 46~94 之下)。畫 drawItemIcon 同樣式的圖示 + 文字『獲得 <裝置名>』(裝置名: 聚木機關 / 聚石機關 / 聚晶機關 / 聚核機關 / 拾遺機關 / 驅獸機關 / 巢心機關 / 疾時機關, 依 type), 文字由本函式畫。t 從 0 走到 dur(1.5), 前 0.2 秒淡入、最後 0.3 秒淡出。"
+    },
+    {
+      "name": "drawHud",
+      "state": [
+        "mode",
+        "stock",
+        "ratePerMin",
+        "bumpT",
+        "bumpDur",
+        "time",
+        "hp",
+        "maxHp"
+      ],
+      "size": [
+        1280,
+        40
+      ],
+      "notes": "固定在畫面頂端 (0,0) 起 1280x40(ui 方案 A: 深色木板 + 羊皮紙牌)。左側四格素材(格寬 170, 起點 x=16、186、356、526): 圖示(中心見全域 notes)、持有數 stock、每分鐘總產量 ratePerMin(小數 1 位, 寫成『+12.3/分』)。**不畫用途小字**。bumpT 是 { wood, stone, crystal, core } 四個數字, bumpDur=0.2: 飛行素材剛投進該格時(持有數 +1), 該格像投幣口被壓扁一下(整格高度至多縮成 0.85 倍再彈回, 以格中心為準)並從圖示噴 4~6 點小火花(至多 12px, 可超出資訊列下緣), 數字彈一下(至多 1.3 倍); 閒置時 bumpT = bumpDur。mode='map' 只畫上述, time / hp / maxHp 為 null。mode='level' 再在右側 (720~1270) 畫: 血量 hp/maxHp(愛心, maxHp 3~6(血量升級 3 階: 4 / 5 / 6))、這趟秒數 time(小數 1 位)。**不畫這趟所得、職業圖示與技能冷卻**。聲音開關圖示在資訊列下方另由 drawSoundIcon 畫。 polish 第 5 輪花費變大, 持有數 stock 可能到 4 位數, 每格 170 寬要放得下『9999 +99.9/分』(放不下時縮字到 12px)。"
+    },
+    {
+      "name": "drawSoundIcon",
+      "state": [
+        "x",
+        "y",
+        "on",
+        "alpha"
+      ],
+      "size": [
+        36,
+        36
+      ],
+      "notes": "聲音開關圖示, 中心 (x,y)(RD 傳: 預設 (1250,62); 關卡內第 4 關改傳左上角 (30,62), 見全域 notes)。on=true 畫喇叭 + 聲波, on=false 畫喇叭 + 叉, 跟 M 鍵同步; ui 方案 A 的石鍵帽底, 小字『M』標在圖示右下角內(字級至少 10px)。整個圖示畫在 36x36 框內, 不依 x 位置改畫法(左上、右上同一個樣子)。alpha: 0.3~1, 整個圖示乘這個不透明度; 平常 1, 關卡內與玩家 / 活著的怪物 / 地上素材 / 飛行物重疊時 RD 漸變到 0.3(polish 第 4 輪)。所有畫面都畫在最上層; 觸控模式 RD 不呼叫。"
+    },
+    {
+      "name": "drawTutorial",
+      "state": [
+        "step",
+        "arrows",
+        "arrowsT",
+        "bubble",
+        "spot",
+        "doneT",
+        "doneDur",
+        "t"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "notes": "新手教學的大箭頭 + 提示板 + 聚光燈(polish 第 5 輪改寫、第 6 輪依回饋改箭頭與提示板, 舊欄位對照見全域 notes; 外觀照 visual/direction.md 的 tut-arrow B、tut-text B、keycap B、tut-spotlight B, 方案程式 visual/options/tut-arrow-B.js、tut-text-B.js、tut-spotlight-B.js 可參考外觀, **幾何以本說明為準**)。所有座標為畫布座標(1280x720), size 為整個畫面(箭頭、提示板、暗幕都可能在任何位置)。關卡內、大地圖、準備頁共用; 縮圖、預覽、說明都不呼叫。畫的順序(本函式內, 由下到上): spot 暗幕與光洞 → arrows → bubble(提示板蓋在箭尾上)。\n**step**: 目前步驟代號(字串, 只供美術區分少數特殊畫法; 位置與內容一律看其他欄位): 'map_pick'(地圖 1)、'prep_start'(準備 1)、'demo_you'、'demo_mat'、'demo_mon'、'demo_goal'、'demo_sites'、'demo_start'(演出 1、3~7; 演出 2 由 drawCtrlPanel 畫, 那段不呼叫本函式)、'gate'(第一關擋終點)、'map_replay'(地圖 2 / 2a)、'map_slow'(地圖 2b)、'map_upgrade'(地圖 3)、'map_shop'(地圖 4)。\n**bubble**: null(不畫; 此時 arrows 也不畫)或 { x, y, place, text, typeT, cont, contT, next, inT, outT }: tut-text B 深色木板提示板(落影 + 深木板 + 板縫 + 深邊 + 內側淡金線), **沒有小尾巴 / 尖角**。字級 30、行高 46、內距左右 30 / 上下 22, 一行最寬 560px(超過自動換行; 標點不放行首), 字串裡的 \\n(換行字元)= 強制換行; 板寬 = 最寬一行 + 60(next 不為 null 時至少 140, 否則不設最小值)、板高 = 行數 × 46 + 44; **排版以「text + (cont 不為 null 時的 cont)」整段先排好, 板子從第一幀就是這個大小, 打字中不伸縮**(唯一例外: cont 從 null 變成字串的那一刻以 0.2 秒長到新大小, 由美術依 contT < 0.2 做)。**每一行水平置中、整塊字垂直置中**。x = 板子水平中心(美術把板子夾在畫面 x 20~1260 內); place 'above' = 板子底邊在 y; 'below' = 板子頂邊在 y。text / cont: 句子字串, 標記: [ ] 包住的是關鍵詞(常駐金色, 括號本身不畫)、{Z} = 句中的 Z 按鍵外觀(keycap B, 寬約 1.7 個字, 與字同一行垂直置中)。**逐字規則**(與 RD 共用同一條算時間, 不可自訂): typeT = 板子彈出完成後經過的秒數(彈出中為負數或 0); 標記與 \\n 以外的每個字(含標點與空白)佔 0.045 秒、{Z} 佔 0.10 秒、\\n 佔 0 秒, 在 , ， 、 ! ！ 。 之後多停 0.12 秒; 第 k 個字在它的累計時刻出現; 每個字從下方 10px 彈起、回彈落定(0.15 秒), 剛出現時金色、0.25 秒內退成米白(關鍵詞維持金色)。cont 的字以 contT 依同一規則出現(contT 為 null 時 cont 不畫, 但 cont 不為 null 時仍算進排版)。next: null 或 { key: 'z', label: '繼續' | '進入', show }: 板子右下角框線上騎一顆 Z 按鍵外觀(中心 = 板右緣 − 34, 板底邊)+ 左邊小字 label, show=true 時才畫, 每秒往外擴一圈金環(至多 18px)並輕輕一鼓; show=false 不畫。inT 0 → 0.25: 板子以自己的中心從 0.6 倍回彈放大進場, 閒置 inT = 0.25; outT: null(沒在收)或 0 → 0.25: 板子縮回自己的中心並淡出(收起中照樣畫已出現的字)。\n**arrows**: 長度 0~3 的陣列(i 從 0 起算, 同時畫), 每項 { tipX, tipY, aimX, aimY, side, along }。tipX, tipY = 尖端(已是被指目標外框外 6px, 美術不再外推); aimX, aimY = 瞄準點(被指目標的中心); side = 箭尾從提示板哪一邊出發: 'top' | 'bottom' | 'left' | 'right'; along = 沿那條邊的位置(top / bottom 給 x、left / right 給 y; 美術夾在該邊兩端各內縮 12px 的範圍內)。**幾何**(照算, 不自行加彎): â = (aim − tip) 的單位向量; 箭尾 S = 提示板「實際排好的」那條邊上 along 那一點, 再往板內縮 6px(板子後畫會蓋住箭尾, 看起來從板子拉出); 箭頭底座 B = tip − â·36; 箭身 = S → B 的一條二次貝茲曲線, 控制點 C = B − â·(|B − S| / 2)(末端切線 = â, 與箭頭無縫接上, 中段不轉折); 箭頭 = B 兩側各 24px 的倒鉤三角(寬 48)、尖端在 tip; 箭身半寬沿曲線從 S 的 5px 平順漸變到 B 的 10px。外觀照 tut-arrow B: 實心金色緞帶 + 右下深金厚度(厚度只往右下擠, 不超過尖端)+ 粗黑描邊 + 箭身白色高光線。**動態**(由 t 推, 週期 1 秒, 多支依 i 錯開 0.15 秒): 先拉弓——**只有尖端**沿 −â 縮回至多 10px(曲線以縮回後的尖端照公式重算, 箭尾不動), 再彈回 tip, 到尖端那一下沿 â 壓扁回彈、尖端兩側爆出衝擊刺(往箭尾那側扇開, 不蓋到目標); 尖端最遠只到 (tipX, tipY)。arrowsT 0 → 0.25: 這組箭頭剛出現(或換到新目標)的進場——從箭尾沿曲線長到尖端; 閒置 arrowsT = 0.25。bubble.outT 不為 null 時, 箭頭同步沿曲線縮回箭尾(進度 = outT / 0.25)。\n**spot**: null 或 { holes, k }: tut-spotlight B 聚光燈。holes: 長度 1~3 的陣列, 每項 { rects: [[x, y, w, h], ...](1~6 個矩形, 一處工程的工程牌 + 結構格外接矩形 + 迷霧矩形, 畫布座標, 由 RD 算好), cx, cy(光洞中心) }; 美術以每處的矩形聯集外擴約 16px 畫成柔邊光洞, 洞外壓暗到約 72%(柔邊約 49px 漸變)、洞緣一圈暖白光緣 + 外暈, 每洞一道從畫面上緣打下的光錐(錐內往下飄的塵粒), 光洞緩慢呼吸(2.4 秒一圈)。暗幕只蓋 y 40~720(不蓋資訊列)。k 0~1: 整體淡入淡出程度(暗幕不透明度、光緣、光錐都乘 k)。演出 6 起 spot 有值、arrows 為空陣列。\n**doneT / doneDur(0.3)**: 地圖 1、準備 1 的完成特效——提示板與箭頭一起縮進第 0 支箭頭的尖端、尖端噴 4 顆金星(至多 30px); 閒置 doneT = doneDur 且照常顯示; 0.3 秒播完 RD 換畫面、不再呼叫。t: 遊戲秒數(循環動畫用; 暫停時不走)。\n版面驗算由 spec「新手教學」步驟表給(每步的板子位置、尖端、瞄準點、出發邊都已對過被指元件的版位與不壓到的物件); 美術照給的值畫, 不自行搬動。按鍵一律用 keycap B 按鍵外觀(扁平琺瑯徽章; 畫法同 drawKeyLine)嵌在句中, 不在句尾重複畫一顆。"
+    },
+    {
+      "name": "drawCtrlPanel",
+      "state": [
+        "T",
+        "waitZ",
+        "dockT",
+        "px",
+        "py",
+        "alpha",
+        "t"
+      ],
+      "size": [
+        250,
+        227
+      ],
+      "notes": "新手教學的「操作方式」面板(ctrl-panel A 羊皮紙卷軸 + 使用者附註「逐組點亮按鍵」; 方案程式 visual/options/ctrl-panel-A.js 可參考)。第 1 關教學期間(第 1 關還沒過關)每幀呼叫, 其他時候不呼叫; 縮圖、預覽不呼叫。卷軸 = 上下兩根木軸的直式羊皮紙, 標題「操作方式」+ 4 列「按鍵外觀 | 功能」: 第 0 列 ← → 「移動」、第 1 列 ↑ 「跳躍」、第 2 列 Z 「攻擊」、第 3 列 X 「技能」(列從 0 起算; 按鍵用 keycap B, 鍵欄對齊、字欄對齊)。原尺寸 250x227(含木軸)。\n**時間軸**(polish 第 6 輪加快並改成等 Z; 舊的 dur 作廢): **T** = 面板出現後經過秒數, 0 → 3.2, RD 走到 3.2 後停在 3.2: 0~0.2 捲起的卷軸從角色胸口 (px, py) 冒出、浮到頭頂上方並放大; 0.2~0.6 往下攤開(下軸往下滾), 清單一列列露出, 0.5~0.6 卡底長出指向角色的小尖角; 卷軸原尺寸的位置 = 紙底在 py − 32(角色頭頂上方 14px)、水平置中在 px、左緣夾在 x ≥ 12; 0.6~3.0 **逐組點亮**: 第 i 組在 0.6 + 0.6i ~ 0.6 + 0.6(i+1) 期間該列的按鍵外觀轉金面、整列底色亮起、其他列微暗(角色同步示範由 RD 用 drawPlayer 畫, 不在本函式); **第 1 組(↑ 跳躍)期間整張不透明度: T 1.2~1.3 由 1 降到 0.35、1.3~1.7 停在 0.35、1.7~1.85 回到 1**(角色示範跳躍會跳進面板下半, 面板位置不動、只變淡; 由美術依 T 自己算); 3.0~3.2 停住(全部列恢復一般)。\n**waitZ**: true = 示範完、等玩家按 Z: 面板右下角(下軸右端上方)畫「按 Z 繼續」徽章(同 drawTutorial 的 next 徽章樣式: Z 按鍵外觀 + 小字「繼續」+ 每秒外擴一圈金環); false 不畫。RD 只在 T = 3.2 且 dockT 為 null 時傳 true。\n**dockT**: null = 還沒開始滑(依 T 畫); 0 → 0.95 = 按 Z 後的收合: 0~0.12 徽章與尖角收起; 0~0.7 整張縮成 0.6 倍(150x136)沿上拱弧線滑到左上角, 途中高度縮 25% 再攤回, 後方拖 5 顆金色光點(至多 40px 長); 0.7~0.95 落定: 木軸輕彈一下 + 金框閃一下; dockT ≥ 0.95: 固定在左上角, 卡片左上 (18,54)、150x136, 含木軸外框 x 8~178、y 50~194。中途重進第 1 關或重生時 RD 直接傳 T = 3.2、waitZ = false、dockT = 0.95。\npx, py: 角色判定框中心(第 1 關起點 (100, 462)); dockT 不為 null 後不再用。alpha 0.3~1: 整張乘這個不透明度(只在 dockT ≥ 0.95 固定後由 RD 調: 面板框外擴 4px 與玩家、活著的怪物、地上素材、飛行物重疊時以每秒 6 降到 0.3, 不重疊時回到 1; 之前一律 1, 跳躍示範的變淡由美術依 T 算、不靠 alpha)。t 遊戲秒數(金光點閃爍、徽章金環用)。size 為原尺寸卷軸; 浮起、攤開、滑動、徽章都在畫面內, 屬框外位移例外(位置依上述時間軸, 由美術依 T / dockT 算)。"
+    },
+    {
+      "name": "drawRespawnFx",
+      "state": [
+        "x",
+        "y",
+        "cls",
+        "facing",
+        "t",
+        "dur"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "notes": "第 1 關教學期間被打死後的「重生落下」(respawn C 碎片倒帶; 方案程式 visual/options/respawn-C.js 可參考)。在世界(已重置成新的一趟、定格)畫完、drawSiteSign 之後呼叫; 本函式**自己畫角色**(這段 RD 不呼叫 drawPlayer)。x, y = 起點的角色判定框中心(第 1 關 (100, 462)), 聚合點 = (x, y − 60); cls、facing 同 drawPlayer。t 0 → dur(1.6): 0~0.95 該職業形狀的碎片(sword 方塊 / hunter 三角 / bomber 圓塊, 配色同 drawDeathFx 的碎片)從畫面上緣散開處沿縮小的螺旋盤旋飛回聚合點, 各帶 3 點淡拖尾, 聚合點微光越聚越亮; 0.95~1.05 收緊、聚合點發光; 1.05 往內收的白環一閃(半徑由 40 收到 0)、角色在聚合點發白成形(0.25 秒退回原色), 身上 4 顆小星往外散; 1.2 起角色往下掉 60px(加速), 約 1.41 落到 (x, y): 腳下兩撮小塵 + 地面一條短亮線(至多寬 40); 全程有承接死亡動畫的深色暗幕(約 70% 不透明, 全畫面 1280x720, 不蓋資訊列——資訊列之後由 RD 畫), 1.15~1.6 暗幕掀開淡掉, 碎片與角色畫在暗幕之上; t = dur 時只剩站在起點的角色(RD 隨即改回一般繪製)。閒置 RD 不呼叫。"
+    },
+    {
+      "name": "drawTutSummary",
+      "state": [
+        "openT",
+        "closing",
+        "closeT",
+        "canClose",
+        "t"
+      ],
+      "size": [
+        1120,
+        500
+      ],
+      "notes": "新手教學總結板(tut-summary B, 依使用者附註只留 4 個區塊、拿掉循環跑道、面板縮矮、各區塊輪播小動畫; 方案程式 visual/options/tut-summary-B.js 可參考, 但版面照本說明)。大地圖上呼叫, 本函式先畫全畫面半透明暗幕(大地圖在背後保留可見, 回放照常、素材照常飛但被暗幕壓暗)。木板固定左上 (80,110)、1120x500(ui 方案 A 木板)。標題「新手教學總結」置中 (640,150)。四張直卡(羊皮紙)244x310, 第 i 張左上 (110 + 272i, 180)(i 從 0 起算); 卡內: 卡頂中央號碼釘 1~4、小圖區 (卡內 11,34) 222x124、文字從卡內 y 200 起置中至多 3 行(字級 22、行高 36, 關鍵詞螢光筆金色): 第 0 張「刷關卡」、第 1 張「刷越快,素材累積越快」(關鍵詞「刷越快」)、第 2 張「素材可解鎖修復工程、解鎖新關卡」(關鍵詞「修復工程」「新關卡」)、第 3 張「有空也多去升級所和商店看看吧!」(關鍵詞「升級所」「商店」); 第 3 張用虛線框當旁註, 其餘實線。四段文字固定, 由美術畫。**小圖**用遊戲現行畫法縮小呈現, 各自 3 秒一圈循環(四張起點依 i 錯開 0.75 秒): 0 角色從左跑到終點旗、旗子揮動; 1 一張已過關卡片的縮圖在重演, 素材一顆顆彈出投進一個小資訊列格, 數字往上跳; 2 前半斷橋鋪好、迷霧推開, 後半一張上鎖的關卡卡片鎖彈開變成已開放; 3 升級所卡與商店卡並排、輪流亮起金色選取框。**進場由 openT 決定**(打開後經過秒數, 一直往上走; 暫停時不走): 0~0.5 木板從上方滑下落定; 第 i 張卡在 0.7 + 0.45i 秒起從右側滑入 0.55 秒(回彈落定、卡底揚一點塵), 落定後小圖開始循環; canClose=true(openT ≥ 2.6, RD 判斷)且 openT ≥ 2.9 時在 (640,570) 置中畫「按 [Z] 關閉」(Z 按鍵外觀, 輕輕上下彈)。closing=true 時 closeT 0 → 0.3: 整塊板子以中心縮到 0.9 倍並淡出、暗幕淡掉; closing=false 時 closeT 為 0.3(閒置)。t 遊戲秒數。size 為木板; 暗幕全畫面、滑入中的卡可在木板右側框外, 屬例外。"
+    },
+    {
+      "name": "drawKeyLine",
+      "state": [
+        "x",
+        "y",
+        "align",
+        "px",
+        "parts",
+        "tone"
+      ],
+      "size": [
+        600,
+        32
+      ],
+      "notes": "一行嵌按鍵外觀的提示文字(keycap B 扁平琺瑯徽章; 方案程式 visual/options/keycap-B.js 可參考)。RD 用它畫大地圖底部提示列(x 440、y 702、align 'left'、px 16、tone 'board'); 美術在各面板裡畫按鍵提示時用同一個畫法(可共用內部函式), 讓全遊戲按鍵長一樣。x, y: 對齊點(align 'left' 為左端、'center' 為中心、'right' 為右端; y 為整行垂直中心)。px: 字級(12~30)。parts: 長度 1~16 的陣列, 每項是字串(照字畫)或 { key }: key 為 'z' | 'x' | 'left' | 'right' | 'up' | 'down' | 'esc' | 'm'。按鍵外觀: 深墨底 + 米白字 / 幾何箭頭 + 米白內圈線 + 上半淡反光, 底下一道薄硬邊(唯一的厚度); 造型依功能: z / x 圓角方、方向鍵正圓、esc / m 長膠囊(寫 Esc / M); 高 = 1.5 × px、寬至少 1.7 × px, 與字垂直置中, 前後各留 0.2 × px 間距。tone: 'board'(畫在深色木板 / 暗底上: 字米白)| 'parch'(畫在羊皮紙上: 字深墨); 按鍵外觀兩種底色都一樣(深底亮字)。回傳整行寬度(px)。size 為一般長度的參考, 實際寬度依 parts。"
+    },
+    {
+      "name": "drawMapLink",
+      "state": [
+        "x1",
+        "y1",
+        "x2",
+        "y2",
+        "lit"
+      ],
+      "size": [
+        250,
+        300
+      ],
+      "notes": "大地圖上兩張卡片間的連線, 從父卡片右緣中點 (x1,y1) 連到子卡片左緣中點 (x2,y2), 畫在卡片之前。lit=true(父關已過關)亮、lit=false 暗。連到第 8 關的四條線(4/5/6/7 → 8)全部亮起時, 第 8 關卡片才開放。size 為最大外接框。"
+    },
+    {
+      "name": "drawLevelCard",
+      "state": [
+        "x",
+        "y",
+        "index",
+        "name",
+        "theme",
+        "state",
+        "cost",
+        "stock",
+        "need",
+        "rates",
+        "recordCls",
+        "recordTime",
+        "repairedCount",
+        "siteCount",
+        "devices"
+      ],
+      "size": [
+        176,
+        136
+      ],
+      "notes": "卡片底層, x,y 為卡片左上角(ui 方案 A: 木框卡片 + 羊皮紙文字牌)。**本輪改動(map-card B)**: 文字區**不再畫**『工程 repairedCount/siteCount』; 改成木框彩度跟著修好處數回來: siteCount=3 且 state 為 open / cleared 時, 木框底色 = 灰褐 #46423d 與主題框色依 repairedCount/3 混色(0 = 灰褐、3 = 主題色); siteCount=0(第 8 關)或 sealed / buyable 照主題色畫。縮圖上的灰幕與工程區域框由 drawCardOverlay 畫(本函式不畫)。**裝置格**: devices 為 null(sealed / buyable, 不畫裝置格)或長度固定 2 的陣列(第 0 項 = 1 號格), 每項為裝置 type 或 null; 卡片內 (97,108) 與 (119,108) 各畫一格 21x24 的凹槽: null = 深色凹槽 + 虛線框 + 淡色『+』(空格), 有值 = 較亮的凹槽 + drawItemIcon 同樣式小圖示(邊長 17, 中心在格中心)。文字區第一行 index 名稱 + 職業小圖示 + 秒數畫在 x+8 ~ x+170; **polish 第 5 輪: recordTime(『NN.Ns』)固定右對齊, 右緣在卡片內 x 168、垂直中心卡片內 y 114**(新手教學箭頭指它: 第 1 關 → 畫布 (560, 395)), 名稱與職業小圖示放在它左邊、太長時縮字, 不推動秒數; 第二行四種產量壓在 x+8 ~ x+118(每種約 27px, 字級可縮到 10px), 不碰裝置格。以下為沿用的說明:畫的順序: RD 先呼叫本函式 → 再把縮圖畫進卡片內 (8,8) 160x90(open / cleared 時)→ 最後呼叫 drawCardOverlay。index 1~8; theme 為該關主題('forest' | 'cliff' | 'mine' | 'salt'), 卡框配色呼應主題, 第 8 關的卡框要明顯不同(粉紫 + 斷門紋飾)。state: 'sealed'(封鎖: 縮圖區畫鎖與花費 cost, 整張變暗; 第 8 關改畫斷門剪影與『還差 need 關』, cost 為全 0、need 1~7)| 'buyable'(可解鎖: 縮圖區畫鎖與花費 cost, 不足的看得出)| 'open'(已開放未過關: 縮圖是靜止的關卡, 文字區畫『未過關』)| 'cleared'(縮圖重演回放)。need 只有第 8 關 sealed 時有值, 其餘為 null。文字區 y+106~y+136 兩行: 第一行『index 名稱』、cleared 時的 recordCls 小圖示與 recordTime(秒, 小數 1 位); 第二行 cleared 時四種素材圖示 + 每分鐘產量 rates(小數 1 位, 0 也畫 0.0; 寬度不夠時字可縮到 10px), open 時寫『未過關』。repairedCount 0~3、siteCount 0 或 3。 花費(polish 第 5 輪照 cost-table.csv): 可解鎖 / 封鎖的 cost 只有 wood, 至多 700(3 位數), 鎖下方的數字要放得下。"
+    },
+    {
+      "name": "drawCardOverlay",
+      "state": [
+        "x",
+        "y",
+        "speedMul",
+        "newArea",
+        "selected",
+        "replayP",
+        "marks",
+        "regions"
+      ],
+      "size": [
+        176,
+        136
+      ],
+      "notes": "卡片上層, 畫在縮圖之上, x,y 為卡片左上角。**修復灰幕(map-card B『褪色舊照片』, 本輪新增, 最先畫)**: regions 為長度 0 或 3 的陣列(第 0 項 = 工程 1), 每項 { repaired, rects }; rects 為長度 1~3 的陣列, 每項 [x, y, w, h] = 該工程在縮圖上佔的區域(**畫布座標**, RD 已把『該工程的迷霧矩形 + 工程結構格外接矩形』× 0.125 再加上卡片左上 + (8,8) 換算好, 並裁在縮圖 (x+8, y+8, 160, 90) 內)。regions 長度 0(sealed / buyable / 第 8 關)或 3 項都 repaired=true → 不畫灰幕、不畫任何區域框。否則: 縮圖範圍 (x+8, y+8, 160, 90) 內**除了已修那幾項的 rects 之外**全部去色(灰階)+ 蓋一層霧面灰 + 舊照片細斜紋; 未修那幾項的每個 rect 畫灰白虛線框(線在矩形內側); 已修那幾項的每個 rect 保留原色並畫暖白實線框 + 外側淡光暈(至多 2px)+ 兩角小星。灰幕與框都只畫在縮圖範圍內(裁切)。縮圖重演的角色與怪物也照樣被蓋灰(屬預期)。之後再畫以下沿用的內容: 畫縮圖外框(框住 (8,8) 160x90, 外框內部保持透明不遮縮圖)。speedMul 1 / 1.25 / 1.5(該關裝的加速齒輪換算的回放倍率): 大於 1 時在縮圖右上角內側畫齒輪小徽章『×1.25』/『×1.5』(字級至少 11px)。newArea=true: 縮圖左上角內側畫醒目小標『新區域』(字級至少 11px)。**回放進度條**(replay-map 方案 B): 卡片內 (8,99) 起 160x4; replayP 0~1 為目前回放播到的比例(null = 沒有回放, 不畫進度條); marks 為長度 0~60 的陣列, 每項 { p, kind }, 在條上 p 的位置畫該素材色的小點(直徑 4); 超過 60 個時 RD 只傳前 60 個。播放頭經過某個點時該點亮一下。selected=true 畫整張卡片的選取框(金色粗框 + 頂端金色吊牌三角), 可畫到框外 6px。"
+    },
+    {
+      "name": "drawWorkshopCard",
+      "state": [
+        "x",
+        "y",
+        "anyAffordable",
+        "allDone",
+        "selected"
+      ],
+      "size": [
+        176,
+        136
+      ],
+      "notes": "大地圖營地裡的『升級所』建築卡, x,y 為左上角(RD 傳 (62,150)), 和關卡卡片同規格(木框 + 縮圖區 (8,8) 160x90 畫圖 + 名牌列 y+106~y+136)。縮圖區畫鐵砧與工坊的簡單圖示, 名牌寫『升級所』; **不列任何價格、等級或剩餘項目**。anyAffordable=true(至少有一項解鎖職業或強化買得起)時右上角 (x+160, y+18) 畫金色圓形『!』小記號。allDone=true(兩個職業都已解鎖且四項強化全部升到 3 階)時在卡片中央斜掛一張大標籤『全解鎖』(羊皮紙底 + 金邊, 約 140x40、旋轉約 −8°, 中心約 (x+88, y+56), 字級至少 20), 此時不畫『!』。selected=true 畫選取框(金色粗框 + 頂端吊牌三角, 同關卡卡片), 可畫到框外 6px。"
+    },
+    {
+      "name": "drawShopCard",
+      "state": [
+        "x",
+        "y",
+        "anyAffordable",
+        "soldOut",
+        "selected"
+      ],
+      "size": [
+        176,
+        136
+      ],
+      "notes": "大地圖營地裡的『商店』建築卡(本輪新增), x,y 為左上角(RD 傳 (62,430)), 和升級所卡同規格同畫法。縮圖區畫簡單的商店圖示(紅白條扇貝遮雨棚的小攤 + 攤上一兩座裝置剪影當招牌), 名牌寫『商店』; **不畫貨架、剩餘數量、有貨種數或任何商品細節**(使用者附註)。anyAffordable=true(至少一件未售完且買得起)時右上角 (x+160, y+18) 畫金色『!』(同升級所卡)。soldOut=true(6 種全部售完)時卡片中央斜掛大標籤『已售完』(同『全解鎖』標籤的尺寸與位置, 底色改灰紅、字深色), 此時不畫『!』, 縮圖區整體壓暗。selected=true 畫選取框, 可畫到框外 6px。"
+    },
+    {
+      "name": "drawFlyingMaterial",
+      "state": [
+        "x",
+        "y",
+        "kind",
+        "t",
+        "dur"
+      ],
+      "size": [
+        20,
+        20
+      ],
+      "notes": "大地圖上投向資訊列的素材(四種 kind), 中心在 x,y(RD 算路徑: 0~0.2 秒從起點往上蹦 28px、減速; 0.2~0.7 秒沿拋物線(頂點比起終點連線高 80px)跳進資訊列)。dur = 0.7。replay-map 方案 B『彈跳投幣』: 像有重量的代幣, 邊轉邊跳(以 t 畫水平翻轉), 沒有拖尾。外觀與 drawPickup / 資訊列同一個素材圖示, 縮成 20px。"
+    },
+    {
+      "name": "drawLevelPanel",
+      "state": [
+        "index",
+        "name",
+        "theme",
+        "row",
+        "sites",
+        "siteSel",
+        "slots",
+        "slotSel",
+        "storeCount",
+        "recordCls",
+        "recordTime",
+        "rates",
+        "speedMul",
+        "newArea",
+        "stock",
+        "hintOff"
+      ],
+      "size": [
+        1200,
+        640
+      ],
+      "notes": "關卡準備頁『作戰桌』(stage-panel 方案 A, 拿掉職業列與加速器列; **本輪拿掉商店列**, 商店搬到大地圖營地), 固定左上 (40,48); 繪製順序: RD 先呼叫本函式(畫全畫面半透明暗幕與木板面板, 預覽框內部留空不填色)→ 再把預覽畫進預覽框 → 疊 drawSiteHighlight → 最後疊號碼釘(本函式不畫, 由預覽裡的 drawSiteSign 帶號碼)。版面(畫布座標, 左上角): 標題列 (60,56) 畫『第 index 關 name』與主題名(theme: forest 翠林谷地 / cliff 風蝕高崖 / mine 地底礦坑 / salt 鹽原斷門); 預覽框 (60,96) 640x360 只畫外框; 紀錄區 (60,468) 640x120: recordCls 小圖示、recordTime(秒, 小數 1 位)、四種每分鐘產量 rates 與回放倍率『×speedMul』(1 時不畫), 未過關時三者為 null 畫『尚無回放』, newArea=true 加『修好後還沒跑過』小字; 紀錄區下方 (60,598) 640x48 留空(上一輪的教學橫幅帶已移除, 本函式不畫任何東西); 右側三列: 工程列 (720,96) 480x180、裝置格列 (720,286) 480x120、開始挑戰列 (720,416) 480x170; 最下方一行提示 (60,664) 起『[↑][↓] 換列  [←][→] 選擇  [Z] 確定  [X] 關閉』。row 0/1/2 = 工程 / 裝置格 / 開始挑戰(從 0 起算; 上一輪的 3 = 開始挑戰已改成 2), 選中列 = 金色粗框 + 左側金色指標 ▶。**工程列**: 列頂端小標『修復工程』; sites 為長度 0 或 3 的陣列(第 0 項 = 工程 1), 每項 {status, role, kind, cost}; status: 'open'(未修)| 'done'(已完工); role: 'shortcut' | 'treasure' | 'nest'; kind: 'bridge' | 'stairs' | 'rubble' | 'nestgate'; cost 為素材組(只有 stone 大於 0)。三張卡左上 (728+158i, 128)、150x130(i 從 0 起算), 每張頂端畫號碼釘 1/2/3(與 drawSiteSign 同款)與角色標誌、角色名(『捷徑』/『藏寶處』/『巢穴』)、結構名(斷橋 / 崩梯 / 堵塞隧道 / 巢穴門); open 畫花費(不足看得出)與『Z 修復』; done 畫『已完工』蓋章。siteSel 0~2 選中卡 = 金框 + 浮起 3px + 頂端吊牌三角。sites 長度 0(第 8 關)時列內畫『本關沒有工程』, siteSel 為 null。**裝置格列**: 列頂端小標『裝置格』; slots 長度固定 2(第 0 項 = 1 號格), 每項為裝置 type 或 null; 1 號格 (728,310) 230x88、2 號格 (966,310) 230x88; 格內**不畫『N 號格』字樣**(polish 第 3 輪回饋; 1 號 / 2 號只用左右位置區分); 有裝畫 drawItemIcon 同樣式圖示(邊長 40)、裝置名與一行效果(聚木機關『每次通關 +4 木材』、聚石機關『每次通關 +3 石頭』、聚晶機關『每次通關 +2 水晶』、聚核機關『每次通關 +2 魔核』、拾遺機關『撿到的素材 +1』、驅獸機關『打怪掉落 ×2』、巢心機關『打怪掉落 ×2、通關 +4 魔核』、疾時機關『回放速度 +25%』), 沒裝畫『空』; slotSel 0~1 選中格明顯, 選中時畫『Z 打開裝置倉庫』; storeCount(倉庫裡還沒安裝的裝置總座數, 0~36)為 0 **且**選中格是空的時改畫紅字『倉庫沒有裝置』(選中格有裝置時照畫『Z 打開裝置倉庫』, 進去可拆下)。**開始挑戰列**: 大石鍵按鈕『開始挑戰』+ 鍵帽 Z, 置中在列內。stock 只用來判斷工程花費是否不足。 polish 第 5 輪: 按鍵一律用 keycap B 按鍵外觀(扁平琺瑯徽章; 畫法同 drawKeyLine)嵌在句中, 不在句尾重複畫一顆(polish 第 5 輪, 見 spec「操作」末段): 工程卡『[Z] 修復』、裝置格『[Z] 打開裝置倉庫』、開始挑戰鈕『開始挑戰』旁的 Z 改畫成按鍵外觀(只畫一顆, 不在字後再重複)。工程花費(cost-table.csv)stone 至多 400(3 位數)。新手教學「準備 1」的大箭頭與提示板另由 drawTutorial 疊在本頁之上(polish 第 6 輪: 提示板在紀錄區下方 x 338~699、y 596~686, 箭頭從板子右緣指向開始挑戰鈕中心 (967,498)、尖端 (863,536)); **hintOff**: true = 不畫最下方 (60,664) 那行操作提示(只有準備 1 那一步傳 true, 讓位給提示板), 未給或 false 照常畫。"
+    },
+    {
+      "name": "drawSiteHighlight",
+      "state": [
+        "x",
+        "y",
+        "w",
+        "h",
+        "active"
+      ],
+      "size": [
+        640,
+        360
+      ],
+      "notes": "準備頁預覽上框出選中的工程(結構與它要開出的區域), x,y 為框的左上角、w,h 為寬高(畫布座標, RD 已換算成預覽位置, 不受 0.5 縮放; w,h 範圍 20~640 x 20~360)。框是外緣在 (x,y,w,h) 的矩形線框(線畫在內側)。active=true(目前在工程列)明顯、會脈動; 不在工程列時不呼叫。"
+    },
+    {
+      "name": "drawDevicePanel",
+      "state": [
+        "slotNo",
+        "level",
+        "current",
+        "entries",
+        "sel"
+      ],
+      "size": [
+        800,
+        480
+      ],
+      "notes": "裝置倉庫面板(本輪新增, 取代 drawBackpackPanel; devices 方案 C『左清單 + 右大圖預覽』), 固定左上 (240,120), 疊在準備頁上; 本函式先畫一層半透明暗幕蓋住整個畫面(準備頁在背後保留可見), 再畫面板(ui 方案 A 木板)。**只列還沒安裝的裝置, 不顯示任何『N 關 N 號』**。標題 (264,132)『裝置倉庫 — 裝到 slotNo 號格』(slotNo 1~2; level 1~8 為目前準備頁的關卡, 只用來決定右預覽石牆的主題色調: 1~3 翠林、4~5 高崖、6~7 礦坑、8 鹽原)。current: 這一格目前裝的裝置 type 或 null。entries: 長度 0~8 的陣列, 每項 { type, n }(n 1~8 = 倉庫裡這種的座數; polish 第 5 輪商店數量變多, 疾時至多 8), 依 RD 排好的順序(疾時 / 聚木 / 聚石 / 聚晶 / 聚核 / 拾遺 / 驅獸 / 巢心, 只含 n ≥ 1 的種類)。**左清單**: 第 i 列左上 (284, 169+46i)、380x42(i 從 0 起算), 共 1 + entries.length 列(至多 9 列, 最後一列底 579, 全部放得下、不捲動): 第 0 列固定是『拆下』(虛線方框 + 向上箭頭小圖示 + 『拆下』+ 右端小字『清空這一格』); 第 i 列(i ≥ 1)= entries[i−1]: drawItemIcon 同樣式圖示(邊長 34, 中心 (312, 列中心 y))、裝置名(字級 16)、下方效果一行(字級 11, 文字同 drawLevelPanel)、右端『×n』(字級 18)。每列是羊皮紙牌; sel(0 ~ entries.length)選中列 = 金色粗框 + 頂端吊牌三角 + 列左側 (268~280, 列中心 y) 金色 ▶ 指標。**右預覽**: 情境框 (684,169) 324x250: 一面石磚牆(主題色調)+ 中央暖光, 選中裝置的大圖示(邊長 150, 中心 (846,294))嵌在牆上; 資訊牌 (684,429) 324x92: 裝置名(字級 20)、右上分類小字(通關產出 / 撿拾加成 / 掉落加成 / 掉落 + 產出 / 回放加速)、效果一行(字級 14)、『倉庫裡 n 座 · Z 安裝到 slotNo 號格』(字級 12)。sel=0(拆下)時: current 有值 → 情境框畫 current 的大圖示並蓋一層淡灰, 資訊牌寫『拆下 <current 裝置名>』與『裝置回到倉庫』; current=null → 情境框畫空的嵌座凹槽, 資訊牌寫『這一格目前是空的』。提示 (684,556)『[↑][↓] 選擇  [Z] 安裝  [X] 返回』; 資訊牌『倉庫裡 n 座 · [Z] 安裝到 slotNo 號格』。按鍵一律用 keycap B 按鍵外觀(扁平琺瑯徽章; 畫法同 drawKeyLine)嵌在句中, 不在句尾重複畫一顆(polish 第 5 輪, 見 spec「操作」末段)。"
+    },
+    {
+      "name": "drawShopPanel",
+      "state": [
+        "entries",
+        "sel",
+        "stock"
+      ],
+      "size": [
+        800,
+        480
+      ],
+      "notes": "商店面板, 固定左上 (240,120), **本輪改疊在大地圖上**(從營地的商店卡打開; 本函式先畫半透明暗幕蓋住整個畫面, 大地圖在背後保留可見)。標題 (264,132)『商店』與目前水晶持有數(右側)。entries: 長度固定 6 的陣列(順序 疾時機關 / 聚木機關 / 聚石機關 / 聚核機關 / 拾遺機關 / 驅獸機關; type 分別為 gear / bagWood / bagStone / coreLamp / glove / horn), 每項 {type, cost, left, max}; cost 為素材組(只有 crystal 大於 0), left 0~max 為剩餘數量。第 i 列左上 (272, 180+56i)、736x50(i 從 0 起算): drawItemIcon(邊長 40)、裝置名、效果一行(同 drawLevelPanel)、價格(不足時照全域規則變紅 + 『缺 N』)、『剩 left』; left=0 畫『售完』並整列變灰。sel 0~5 選中列 = 金框 + 左側 ▶。提示 (272,556)『[↑][↓] 選擇  [Z] 購買  [X] 返回』。按鍵一律用 keycap B 按鍵外觀(扁平琺瑯徽章; 畫法同 drawKeyLine)嵌在句中, 不在句尾重複畫一顆(polish 第 5 輪, 見 spec「操作」末段)。polish 第 5 輪照 cost-table.csv: 價格 crystal 70~150(3 位數), max: 疾時 6、其他 4, left 0~6, 價格與『缺 N』『剩 N』要放得下 3 位數。"
+    },
+    {
+      "name": "drawClassSelect",
+      "state": [
+        "classes",
+        "sel"
+      ],
+      "size": [
+        700,
+        320
+      ],
+      "notes": "職業選擇彈窗, 固定左上 (290,200), 疊在準備頁上(本函式先畫半透明暗幕)。標題 (316,212)『選擇職業』(polish 第 3 輪由『選擇出戰職業』改)。classes: 長度固定 3 的陣列(順序 劍士 / 獵人 / 炸彈工), 每項 {cls, owned}; 第 i 張卡左上 (316+224i, 250)、200x220: 畫 drawPlayer 同款角色(放大到約 2.5 倍, idle 姿勢)、名稱(卡片頂 + 136)、職業說明兩行(polish 第 3 輪使用者定稿, 取代舊的『擅長: …』): 卡片頂 + 158『特性: X』、卡片頂 + 178『技能: Y』, 字級 13~14、置中(劍士 特性: 揮砍 / 技能: 衝刺; 獵人 特性: 自動索敵 / 技能: 潛行; 炸彈工 特性: 爆破 / 技能: 爆風擊退); owned=false(未解鎖)畫鎖與『到升級所解鎖』並變暗。sel 0~2 選中卡 = 金框 + 浮起 3px + 頂端吊牌三角, 已解鎖且選中時卡底畫『Z 出發』。提示 (316,486)『[←][→] 選擇  [Z] 出發  [X] 返回』; 卡底『[Z] 出發』。按鍵一律用 keycap B 按鍵外觀(扁平琺瑯徽章; 畫法同 drawKeyLine)嵌在句中, 不在句尾重複畫一顆(polish 第 5 輪, 見 spec「操作」末段)。 版面驗算(卡片高 220): 名稱 136、特性 158、技能 178、『到升級所解鎖』或『Z 出發』下移到卡片頂 + 202(上一版 192 會壓到技能行), 都在卡內。"
+    },
+    {
+      "name": "drawUpgradePage",
+      "state": [
+        "row",
+        "recruits",
+        "recruitSel",
+        "stats",
+        "stock",
+        "unlockIdx",
+        "unlockT",
+        "unlockDur"
+      ],
+      "size": [
+        1200,
+        640
+      ],
+      "notes": "升級所頁面, 固定左上 (40,48); 背後全畫面半透明暗幕也由本函式畫。標題『升級所』在 (60,56)。五列由上到下: 解鎖職業列 (80,100) 1120x150、移動速度列 (80,262) 1120x84、血量列 (80,352) 1120x84、冷卻列 (80,442) 1120x84、攻擊列 (80,532) 1120x84; 最下方一行提示 (60,664)『[↑][↓] 換列  [←][→] 選擇  [Z] 解鎖 / 強化  [X] 關閉』; (340,622) 600x40 空著(上一輪的教學橫幅帶已移除)。row 0~4 = 解鎖職業 / 移動速度 / 血量 / 冷卻 / 攻擊(從 0 起算), 選中列 = 金框 + 左側 ▶。**本輪改字**: 全頁不出現『招募』, 一律『解鎖職業』『已解鎖』(欄位名 recruits / recruitSel 沿用不改)。recruits: 長度固定 2 的陣列(順序 獵人 / 炸彈工), 每項 {cls, owned, cost}, cost 為素材組(只有 wood 大於 0); 兩張職業卡並排: 左卡 (100,124) 530x116、右卡 (650,124) 530x116; 列頂端小標『解鎖職業』; 每張卡畫角色(owned=false 畫成灰色剪影 + 鎖, owned=true 畫彩色)、名稱(卡片頂 + 26)與職業說明兩行(同 drawClassSelect 的『特性: …』『技能: …』; 卡片頂 + 50 與 + 70, 字級 13); 花費與『Z 解鎖』行移到卡片頂 + 96(卡高 116, 都在卡內), owned=true 畫『已解鎖』章, 否則畫花費(不足看得出)與『Z 解鎖』; recruitSel 0~1 選中卡明顯。劍士不列。**解鎖特效**(unlock-fx 方案 B『光柱召喚角色躍出』): unlockIdx 為 null 或 0~1(正在播特效的那張卡, 對應 recruits 的第幾項, 從 0 起算), unlockT 0 → unlockDur(1.3): 0~0.3 鎖喀一聲彈開飛走、一道金色光柱從卡片上方打在灰色剪影上 → 0.3~0.65 顏色從腳往頭灌滿(剪影 → 彩色)→ 0.65~1.0 角色放大到至多約 1.45 倍(polish 第 2 輪美術回報: 2 倍與頭頂位置限制衝突, 以位置為準)、往上跳出卡片歡呼(以角色腳底為準放大, 頭頂至多到卡片上緣以上 60px, 即 y ≥ 64(頁面上緣 48 之內; 可蓋過標題列); 背後職業色放射光(半徑至多 120)+ 金星往外噴至多 60px)→ 1.0~1.3 角色落回卡上原位、『已解鎖』章從大縮小砸下。特效期間 recruits[unlockIdx].owned 已是 true(解鎖在按下時生效), 美術依 unlockT 決定畫灰或彩; 閒置時 unlockIdx = null、unlockT = unlockDur。特效可畫到卡片外(放射光、跳出的角色), 仍在頁面框內; 疊在其他列之上。stats: 長度固定 4 的陣列(順序 移動速度 / 血量 / 冷卻 / 攻擊), 每項 {key:'speed'|'hp'|'cd'|'atk', lv, maxLv, cost}; maxLv: 四項都是 3(polish 第 3 輪血量、攻擊力由 2 階改 3 階); cost 為素材組(只有 core 大於 0), 已滿為 null 畫『已滿』; 每列畫名稱、等級格(maxLv 個格子, 已升的 lv 格填滿)、目前效果與下一級效果: speed『移動速度 +0% / +8% / +16% / +24%』、hp『血量 3 / 4 / 5 / 6』、cd『技能冷卻 -0% / -15% / -30% / -45%』、atk『攻擊傷害 +0 / +1 / +2 / +3』(依 lv 取第 lv 項, 從 0 起算; 下一級取第 lv+1 項)。 polish 第 5 輪: 按鍵一律用 keycap B 按鍵外觀(扁平琺瑯徽章; 畫法同 drawKeyLine)嵌在句中, 不在句尾重複畫一顆(polish 第 5 輪, 見 spec「操作」末段)(職業卡『[Z] 解鎖』、強化列的按鍵提示同)。花費照 cost-table.csv: 解鎖職業 wood 50; 強化 core 移動速度 10 / 100 / 500、血量 20 / 300 / 600、冷卻 15 / 150 / 300、攻擊 50 / 200 / 500(至多 3 位數)。"
+    },
+    {
+      "name": "drawResultPanel",
+      "state": [
+        "time",
+        "run",
+        "rates",
+        "cls",
+        "items",
+        "oldTime",
+        "oldRates",
+        "oldCls",
+        "oldRun"
+      ],
+      "size": [
+        720,
+        420
+      ],
+      "notes": "過關結算, 固定左上 (280,150), 畫在 drawClearIris 的全木板之上(本函式不畫全畫面暗幕)。照 result-panel 方案 B『對決外框發光』。資料: time 這趟秒數、run 這趟四種素材得到數、rates 這趟四種每分鐘產量(用目前裝置配置算)、cls 這趟職業; items 為這趟得到的裝置 type 陣列(長度 0~2: 寶箱與巢心機關可能同一趟都拿到); oldCls / oldTime / oldRun / oldRates 為目前回放的同樣四項(oldRates 也用目前裝置配置算)。**oldTime 有值(已有回放)**: 面板頂端『過關』; 下面兩欄同大、左右對稱: 左欄『這一趟』(約 (300,214) 270x270)、右欄『目前回放』(約 (710,214) 270x270), 中間 (570~710) 是脊, 列名寫在脊上。列由上到下(兩欄逐列對齊, 列高約 40): 職業(職業小圖示 + 名稱)、通關時間(秒, 小數 1 位)、木材 / 石頭 / 水晶 / 魔核 各一列(每格寫『run 數 · rates/分』, 素材圖示在脊上的列名旁)。『這一趟』整欄金色外光(光暈畫在欄外至多 10px)+ 欄頂端中央吊一張金色標籤『這一趟』(吊牌可超出欄上緣 24px); 『目前回放』只有淡色虛線框、數字字色較淡、頂端淡色小字『目前回放』。脊上每列(職業列除外)一個綠色箭頭指向較好的一邊(通關時間: 小的較好; 素材列: rates 大的較好), 一樣時畫灰色『=』。items 不為空時, 在左欄下方 (300,494) 起逐個畫圖示(邊長 32)與『獲得 <裝置名>』(一行至多 2 個)。底部 (640,548) 置中『[Z] 採用這一趟  [X] 保留舊的』(按鍵外觀)。**oldTime=null(首次過關, oldCls / oldRun / oldRates 也為 null)**: 只畫『這一趟』一欄置中(約 (505,214) 270x270, 照樣金色外光 + 吊牌)、items 同上畫在欄下方, 底部『已存成回放  [Z] 回大地圖』。第 8 關首通不呼叫(改播結局)。 按鍵一律用 keycap B 按鍵外觀(扁平琺瑯徽章; 畫法同 drawKeyLine)嵌在句中, 不在句尾重複畫一顆(polish 第 5 輪, 見 spec「操作」末段)。"
+    },
+    {
+      "name": "drawFailPanel",
+      "state": [],
+      "size": [
+        520,
+        240
+      ],
+      "notes": "失敗面板, 固定左上 (380,240), 死亡動畫(drawDeathFx)播完才出現, 畫在 drawDeathFx(t = dur 的暗下世界)之上。畫『失敗』與『[Z] 重來  [X] 回大地圖』(按鍵外觀)。第 1 關教學期間(第 1 關還沒過關)失敗不出這個面板, 改播 drawRespawnFx。"
+    },
+    {
+      "name": "drawPausePanel",
+      "state": [
+        "mode",
+        "touch"
+      ],
+      "size": [
+        520,
+        280
+      ],
+      "notes": "暫停面板, 固定左上 (380,220), 背後全畫面半透明暗幕也由本函式畫。mode='level' 畫『暫停』與『[Esc] 繼續  [Z] 重來  [X] 回大地圖』; mode='map'(大地圖與各面板)畫『暫停』與『[Esc] 繼續』(按鍵外觀, polish 第 5 輪)(**本輪拿掉『Z 下載遊玩紀錄』**, 本作不收遊玩紀錄)。touch=true 時不畫『Esc』字樣(只畫『繼續』等文字, 觸控按鈕另做)。死亡動畫與過關動畫期間不會暫停, 不必考慮疊在 drawDeathFx / drawClearIris 上。"
+    },
+    {
+      "name": "drawDeathFx",
+      "state": [
+        "x",
+        "y",
+        "cls",
+        "facing",
+        "hitX",
+        "hitY",
+        "t",
+        "dur"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "notes": "死亡動畫(本輪新增; death-anim 方案 B『定格碎裂』), 在定格的世界畫完之後呼叫(繪製順序見全域 notes), 本函式**自己畫角色**(RD 這段不呼叫 drawPlayer)。x,y = 角色判定框中心(28x36; 掉出畫面時 RD 傳 y = 702), cls、facing 同 drawPlayer。hitX, hitY = 致命一擊的來源中心(畫布座標; 掉出畫面時 = 角色中心), 決定裂痕從哪一側開始爬。t 0 → dur(1.3): 0~0.15 全畫面(1280x720)由透明壓到深色暗幕(約 70% 不透明, 資訊列之後由 RD 蓋上), 只有角色保持原亮度(畫在暗幕之上)並微微發白; 0.15~0.7 角色定格(idle 姿勢、朝 facing)左右抖動 ±2px 越來越快, 白色裂痕從靠近 (hitX,hitY) 的那一側爬滿全身; 0.7 碎裂: 角色消失、噴出 10~16 片職業形狀的碎片(sword 方塊 / hunter 三角 / bomber 圓塊, 顏色取該職業身上的配色)往外與往上噴、受重力落下(碎片至多飛離中心 160px, 可落到 y 720 以下不畫)+ 一圈白色碎裂閃光(半徑至多 40); 0.7~1.3 碎片落地彈一下後淡去。t = dur 時只剩暗幕(角色與碎片都不見)——失敗面板開著時 RD 持續以 t = dur 呼叫, 當作面板的底。size 為整個畫面(暗幕全畫面)。縮圖、預覽不呼叫。"
+    },
+    {
+      "name": "drawClearIris",
+      "state": [
+        "cx",
+        "cy",
+        "t",
+        "dur"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "notes": "過關光圈(本輪新增; clear-anim 方案 C『光圈收合』), 在 RD 以放大畫完定格世界、還原變換之後呼叫(畫布座標, 不受放大影響; 繪製順序見全域 notes)。cx, cy = 光圈圓心 = 焦點(玩家中心與終點旗中心的中點; RD 以焦點為不動點放大, 所以放大後焦點仍在 (cx,cy))。t 0 → dur(1.4): 0~0.12 全畫面白閃(由 0.6 不透明淡到 0); 光圈 = 圓外全部蓋上介面木板(ui 方案 A 的深色木板紋 + 板縫), 圓周是一圈金色粗邊(寬約 8, **半徑 R 指金邊內緣**)+ 8 顆均勻分布的角釘; R: 0~0.08 R ≥ 畫面對角(看不到木板)→ 0.08~0.72 收到 130(先快後慢)→ 0.72~0.86 回彈 130 → 148 → 130 → 0.86~1.15 停在 130 → 1.15~1.38 一口氣收成 0(先慢後快)→ 1.25~1.4 在 (cx,cy) 閃一顆金星(半徑至多 40, 1.4 時淡完; 與收合尾段重疊); 1.38 起整個畫面都是木板(沒有圓)(polish 第 2 輪美術回報原寫法時間相撞, 照實作改寫)。結算面板開著時 RD 持續以 t = dur 呼叫, 當作面板的底。資訊列由 RD 之後蓋上(光圈不畫資訊列區也沒關係)。縮圖、預覽不呼叫。"
+    },
+    {
+      "name": "drawEnding",
+      "state": [
+        "t",
+        "totalTime",
+        "kills",
+        "totals"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "notes": "結局動畫(ending 方案 B『高崖日出』), 畫滿 1280x720, 長 14 秒, 動態完全由 t 決定(RD 從 0 走到 14 後停在 14; 玩家按鍵跳過時 RD 直接把 t 設成 10.4)。側視電影鏡頭: 風蝕高崖的黎明前, 三職業(hero 方案 A, 加跑步擺腿)從左跑進崖頂停在崖邊 → 太陽從雲海後升起, 天色由深藍轉金、三人背後拉出長影 → 三人輪流歡呼(劍士跳起、獵人朝天射一箭化成金星、炸彈工炸出四色素材煙火)→ 崖下山谷沿小路由遠到近亮起 8 盞關卡燈, 小路盡頭的倉庫亮起(呼應開始畫面的倉庫)→ t ≥ 10.4 起停在結算畫面: 頂端展開羊皮紙卷軸, 寫『通關時間 m:ss』(totalTime 秒, 美術格式化)、『擊倒怪物 kills』與四種素材圖示 + totals 數字(整局總收成); 卷軸下方 (640,660) 寫『按任意按鍵回到大地圖』(只在 t ≥ 10.4 時畫, 1.2 秒週期明暗呼吸)。不放遊戲名稱。"
+    }
+  ],
+  "sounds": [
+    "ui_move",
+    "ui_confirm",
+    "ui_back",
+    "ui_deny",
+    "title_start",
+    "unlock_level",
+    "repair",
+    "fog_clear",
+    "buy_item",
+    "equip",
+    "upgrade",
+    "unlock_class",
+    "coin_land",
+    "jump",
+    "land",
+    "slash",
+    "dash",
+    "arrow",
+    "stealth_on",
+    "stealth_off",
+    "bomb_throw",
+    "explosion",
+    "shockwave",
+    "hit",
+    "hit_block",
+    "shield_break",
+    "drop_collect",
+    "pickup",
+    "chest_open",
+    "item_get",
+    "monster_down",
+    "chain",
+    "brood_down",
+    "windup",
+    "bee_shot",
+    "hawk_dive",
+    "rock_drop",
+    "beetle_fuse",
+    "player_hurt",
+    "skill_ready",
+    "goal_reach",
+    "level_clear",
+    "iris_close",
+    "player_death",
+    "shatter",
+    "level_fail",
+    "tutorial_done",
+    "boss_slam",
+    "boss_beam_charge",
+    "boss_beam",
+    "boss_rock",
+    "boss_weak",
+    "boss_phase",
+    "boss_down",
+    "pause",
+    "tut_pop",
+    "tut_type",
+    "tut_next",
+    "tut_go",
+    "tut_panel",
+    "tut_dock",
+    "tut_spot",
+    "respawn",
+    "respawn_land",
+    "summary_open",
+    "summary_card"
+  ],
+  "music": [
+    "title",
+    "map",
+    "forest",
+    "cliff",
+    "mine",
+    "boss",
+    "ending"
+  ]
+}

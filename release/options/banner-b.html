@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>banner-b 重演之窗</title>
+<style>body{margin:0;overflow:hidden;background:#000}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="1680" height="720"></canvas>
+<script src="../game/art/art.js"></script>
+<script>
+// 橫幅 B: 開始畫面的「重演之窗」排成一列, 四個地形各自在重演一段通關, 素材從窗裡落到金色輸送帶、在右下堆成小山
+(function () {
+  var cv = document.getElementById('c'), ctx = cv.getContext('2d'), A = window.Art;
+  var BW = 1680, BH = 720, TAU = Math.PI * 2, i, j;
+  function hash(a, b) { var h = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return h - Math.floor(h); }
+  function at(x, y, k, fn) { ctx.save(); ctx.translate(x, y); ctx.scale(k, k); fn(); ctx.restore(); }
+  // 背景: 開始畫面的深藍放射底 + 放射光 + 星點
+  var bg = ctx.createRadialGradient(930, 330, 40, 930, 330, 1100);
+  bg.addColorStop(0, '#2c3a62'); bg.addColorStop(0.5, '#18203a'); bg.addColorStop(1, '#0c1020');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, BW, BH);
+  ctx.save(); ctx.translate(930, 330); ctx.fillStyle = 'rgba(255,230,160,0.035)';
+  for (i = 0; i < 14; i++) { var a = i * TAU / 14 + 0.12; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a - 0.06) * 1300, Math.sin(a - 0.06) * 1300); ctx.lineTo(Math.cos(a + 0.06) * 1300, Math.sin(a + 0.06) * 1300); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
+  for (i = 0; i < 110; i++) { ctx.fillStyle = 'rgba(255,255,255,' + (0.12 + hash(i, 3) * 0.3).toFixed(2) + ')'; ctx.beginPath(); ctx.arc(hash(i, 1) * BW, hash(i, 2) * BH, 0.8 + hash(i, 4) * 1.3, 0, TAU); ctx.fill(); }
+
+  // 窗後的金色環道(橫向一條, 串起四扇窗)
+  var WY = 300, WR = 118, WX = [440, 760, 1080, 1400];
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(WX[0] - 150, WY); ctx.lineTo(WX[3] + 150, WY);
+  ctx.lineWidth = 26; ctx.strokeStyle = '#161220'; ctx.stroke(); ctx.lineWidth = 20; ctx.strokeStyle = '#2c2438'; ctx.stroke();
+  ctx.save(); ctx.setLineDash([10, 16]); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(242,201,76,0.55)'; ctx.stroke(); ctx.restore();
+
+  // 一扇重演之窗: 地形背景 + 地面 + 主角 vs 怪物 + 剛噴出的素材
+  var WINS = [
+    { theme: 'forest', cls: 'sword', pose: 'slash', mat: 'wood', foe: function () { A.drawBoar(ctx, { x: 0, y: 0, facing: -1, state: 'stun', flingDir: 0, hit: false, brood: false, t: 0.2 }); }, fh: 16 },
+    { theme: 'cliff', cls: 'hunter', pose: 'idle', mat: 'stone', foe: function () { A.drawRam(ctx, { x: 0, y: 0, facing: -1, state: 'walk', flingDir: 0, hit: false, brood: false, t: 0.1 }); }, fh: 18 },
+    { theme: 'mine', cls: 'bomber', pose: 'throw', mat: 'crystal', foe: function () { A.drawBeetle(ctx, { x: 0, y: 0, facing: -1, state: 'crawl', flingDir: 0, fuseT: 0.8, fuseDur: 0.8, hit: false, brood: false, t: 0.1 }); }, fh: 12 },
+    { theme: 'salt', cls: 'sword', pose: 'run', mat: 'core', foe: function () { A.drawShieldman(ctx, { x: 0, y: 0, facing: -1, state: 'walk', hasShield: true, flingDir: 0, hit: false, brood: false, t: 0.3 }); }, fh: 20 }
+  ];
+  var CAP = { forest: '#5cbf45', cliff: '#e8eef5', mine: '#9c8a70', salt: '#e8a8d8' };
+  function windowAt(cx, cy, w, idx) {
+    ctx.save(); ctx.translate(cx, cy);
+    var halo = ctx.createRadialGradient(0, 0, WR, 0, 0, WR + 26);
+    halo.addColorStop(0, 'rgba(255,214,90,0.45)'); halo.addColorStop(1, 'rgba(255,214,90,0)');
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, 0, WR + 26, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, WR + 9, 0, TAU); ctx.fillStyle = '#161220'; ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, WR, 0, TAU); ctx.clip();
+    at(0, 0, 0.42, function () { ctx.translate(-640, -430); A.drawBackground(ctx, { theme: w.theme, t: 2 + idx }); });
+    var GT = 58, GK = 1.35;
+    ctx.save(); ctx.scale(GK, GK);
+    for (j = -3; j <= 2; j++) {
+      A.drawGround(ctx, { x: j * 40 + 20, y: GT / GK + 20, theme: w.theme, open: { n: true } });
+      A.drawGround(ctx, { x: j * 40 + 20, y: GT / GK + 60, theme: w.theme, open: {} });
+    }
+    ctx.restore();
+    var HK = 2.3;
+    at(-34, GT - 18 * HK, HK, function () { A.drawPlayer(ctx, { x: 0, y: 0, cls: w.cls, facing: 1, pose: w.pose, poseT: w.pose === 'slash' ? 0.05 : 0.15, swingIdx: 0 }); });
+    at(58, GT - w.fh * 2.0, 2.0, w.foe);
+    A.icons.mat(ctx, w.mat, 12, -58, 34);
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(0, 0, WR - 2, 0, TAU); ctx.lineWidth = 6; ctx.strokeStyle = CAP[w.theme]; ctx.stroke();
+    ctx.restore();
+  }
+
+  // 輸送帶(右下, 避開左下標籤區): 金色環道同款
+  var CY = 600, CX0 = 600, CX1 = 1300;
+  ctx.beginPath(); ctx.moveTo(CX0, CY); ctx.lineTo(CX1, CY);
+  ctx.lineWidth = 30; ctx.strokeStyle = '#161220'; ctx.stroke(); ctx.lineWidth = 24; ctx.strokeStyle = '#2c2438'; ctx.stroke();
+  ctx.save(); ctx.setLineDash([12, 14]); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(242,201,76,0.7)'; ctx.stroke(); ctx.restore();
+  // 窗底落下的素材弧線
+  var KINDS = ['wood', 'stone', 'crystal', 'core'];
+  for (i = 0; i < 4; i++) {
+    var sx = WX[i], sy = WY + WR + 8, ex = Math.max(CX0 + 40, WX[i] + 70), ey = CY - 22;
+    if (i === 3) ex = 1300;
+    ctx.save(); ctx.setLineDash([4, 10]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,214,90,0.5)';
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo((sx + ex) / 2, sy + 10, ex, ey); ctx.stroke(); ctx.restore();
+    for (j = 0; j < 2; j++) {
+      var u = 0.35 + j * 0.4, v = 1 - u, mx = (sx + ex) / 2, my = sy + 10;
+      A.icons.mat(ctx, KINDS[(i + j) % 4], v * v * sx + 2 * v * u * mx + u * u * ex, v * v * sy + 2 * v * u * my + u * u * ey, 30);
+    }
+  }
+  // 輸送帶上的素材: 往右越排越密
+  for (i = 0; i < 12; i++) { var px = CX0 + 30 + i * 56; A.icons.mat(ctx, KINDS[i % 4], px, CY - 18, 30 + i * 1.2); }
+  // 右下素材小山(越堆越多)
+  var hx = 1415, hb = 640;
+  var glow = ctx.createRadialGradient(hx, hb - 50, 10, hx, hb - 50, 170);
+  glow.addColorStop(0, 'rgba(255,214,90,0.55)'); glow.addColorStop(1, 'rgba(255,214,90,0)');
+  ctx.fillStyle = glow; ctx.fillRect(hx - 170, hb - 220, 340, 300);
+  var HEAP = [[-90, 0], [-45, 4], [0, 6], [45, 4], [90, 0], [-68, -38], [-22, -36], [22, -38], [68, -36], [-45, -74], [0, -76], [45, -72], [-22, -110], [22, -108], [0, -144]];
+  for (i = 0; i < HEAP.length; i++) A.icons.mat(ctx, KINDS[(i * 3 + 1) % 4], hx + HEAP[i][0], hb - 20 + HEAP[i][1], 50);
+
+  // 四扇窗最後畫(壓在環道上)
+  for (i = 0; i < 4; i++) windowAt(WX[i], WY, WINS[i], i);
+})();
+</script>
+</body>
+</html>

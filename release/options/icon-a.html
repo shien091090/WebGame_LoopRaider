@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>icon-a 劍士凱旋</title>
+<style>body{margin:0;overflow:hidden;background:#000}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="512" height="512"></canvas>
+<script src="../game/art/art.js"></script>
+<script>
+// 圖示 A: 劍士高舉長劍, 身後翠林、四種素材從腳邊噴向上方(通關 = 素材入帳)
+(function () {
+  var cv = document.getElementById('c'), ctx = cv.getContext('2d'), A = window.Art;
+  var S = 512, th = A.themes.forest;
+  // 背景: 翠林天色 + 中心暖光
+  var g = ctx.createLinearGradient(0, 0, 0, S); g.addColorStop(0, th.sky0); g.addColorStop(1, th.sky1);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+  var r = ctx.createRadialGradient(256, 250, 20, 256, 250, 260);
+  r.addColorStop(0, 'rgba(255,240,180,0.85)'); r.addColorStop(0.45, 'rgba(255,220,130,0.25)'); r.addColorStop(1, 'rgba(255,220,130,0)');
+  ctx.fillStyle = r; ctx.fillRect(0, 0, S, S);
+  // 遠景樹叢(只在四周, 淡)
+  ctx.fillStyle = th.mid;
+  [[30, 330, 70], [110, 360, 60], [400, 350, 66], [490, 320, 74]].forEach(function (c) { ctx.beginPath(); ctx.arc(c[0], c[1], c[2], 0, Math.PI * 2); ctx.fill(); });
+  // 地面: 遊戲裡的翠林地形格, 放大 3 倍
+  ctx.save(); ctx.scale(3, 3);
+  for (var i = 0; i < 5; i++) A.drawGround(ctx, { x: i * 40 - 4, y: 170, theme: 'forest', open: { n: true } });
+  ctx.restore();
+  // 素材噴泉: 從腳邊往上呈扇形噴出
+  var mats = [
+    ['wood', 100, 168, 66], ['crystal', 410, 146, 68], ['stone', 150, 96, 54], ['core', 380, 84, 52],
+    ['crystal', 88, 262, 46], ['wood', 428, 246, 48], ['stone', 262, 84, 38]
+  ];
+  mats.forEach(function (m) {
+    ctx.save(); ctx.globalAlpha = 0.5;
+    var gl = ctx.createRadialGradient(m[1], m[2], 2, m[1], m[2], m[3] * 0.9);
+    gl.addColorStop(0, 'rgba(255,250,210,0.9)'); gl.addColorStop(1, 'rgba(255,250,210,0)');
+    ctx.fillStyle = gl; ctx.fillRect(m[1] - m[3], m[2] - m[3], m[3] * 2, m[3] * 2); ctx.restore();
+    A.icons.mat(ctx, m[0], m[1], m[2], m[3]);
+  });
+  // 主角: 劍士 cheer 姿勢(劍高舉 + 頭頂金星), 放大 9 倍
+  ctx.save(); ctx.translate(256, 450); ctx.scale(1, 0.28);
+  ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.translate(256, 288); ctx.scale(9, 9);
+  A.drawPlayer(ctx, { x: 0, y: 0, cls: 'sword', facing: 1, pose: 'cheer', poseT: 0 });
+  ctx.restore();
+})();
+</script>
+</body>
+</html>

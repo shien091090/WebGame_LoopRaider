@@ -1,5 +1,7 @@
 // 回放冒險 - game.js (傳統腳本, 無 module)
-var W = (window.Art && Art.canvas && Art.canvas.width) || 1280, H = (window.Art && Art.canvas && Art.canvas.height) || 720;
+// W: 設計區寬(玩法、判定、版面都用 1280); CW: 實際畫布寬(觸控裝置 1280~1680, 設計區置中, 兩側由 touch.js 塗黑放按鈕); OX: 設計區置中位移
+var W = 1280, H = 720;
+var CW = Math.max(1280, (window.Art && Art.canvas && Art.canvas.width) || 1280), OX = (CW - W) / 2;
 var TS = 40, GW = 32, GH = 18, DT = 1 / 60;
 var KINDS = ['wood', 'stone', 'crystal', 'core'];
 // JUMP_V 是炸彈工的跳躍初速(關卡編輯器可達檢查讀它, 名稱與值不改); 劍士、獵人用 JUMP_V_HI(規則 42)
@@ -1888,6 +1890,8 @@ function addStock(kind, n) { G.stock[kind] += n; G.bump[kind] = 0; }
 function winRun() {
   R.state = 'won';
   var l = R.l, g = R.L.goal, N = R.f;
+  // 通知網站(winRun 每次真的過關只跑一次): 單關通關(第幾關從 1 起); 最後一關(第 8 關)緊接送全局通關
+  if (window.PVDX) { PVDX.levelClear(l + 1); if (l === 7) PVDX.gameClear(); }
   var rec = { frames: R.frames, events: R.events, N: N, cls: R.cls, ver: G.repairVer[l], goal: { x: g.x, y: g.y }, pickF: R.taken, chestF: R.chestF,
     marks: R.events.slice(0, 60).map(function (e) { return { p: Math.min(1, e.f / Math.max(1, N)), kind: e.kind }; }) };
   var cb = clearBonus(l), run = {};
@@ -2198,8 +2202,8 @@ function startSession() {
   if (!T.off && T.pick === 0) { T.pick = 1; tutMapPickOpen(); }
 }
 function inputDown(code) {
+  if (window.PVDX && PVDX.paused) return;
   ensureSound();
-  if (window.PVDX && PVDX.paused && code !== 'KeyM') return;
   if (code === 'KeyM') { G.muted = !G.muted; applyMute(); return; }
   var sc = G.screen;
   if (sc === 'title') { if (code === 'Escape') return; startSession(); return; }
@@ -2264,6 +2268,7 @@ function inputUp(code) {
   else if (code === 'ArrowRight') keys.right = false;
   else if (code === 'ArrowUp') { if (keys.up) edge.jumpRel = true; keys.up = false; }
 }
+function inputReset() { clearKeys(); }
 var GAME_KEYS = { ArrowLeft: 1, ArrowRight: 1, ArrowUp: 1, ArrowDown: 1, Space: 1, KeyZ: 1, KeyX: 1, Escape: 1, KeyM: 1 };
 function onKeyDown(e) {
   if (e.repeat) { if (GAME_KEYS[e.code]) e.preventDefault(); return; }
@@ -2679,8 +2684,14 @@ function drawSummaryNow(c) {
 }
 function render() {
   var c = ctx;
-  c.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
-  c.clearRect(0, 0, W, H);
+  c.setTransform(canvas.width / CW, 0, 0, canvas.height / H, 0, 0);
+  c.clearRect(0, 0, CW, H);
+  // 設計區(1280)置中: 最外層平移一次, 其餘座標維持設計值
+  c.save(); c.translate(OX, 0);
+  try { renderWorld(c); } finally { c.restore(); }
+  if (window.PVDX) PVDX.draw(c);
+}
+function renderWorld(c) {
   var sc = G.screen;
   if (sc === 'title') Art.drawTitle(c, { t: G.t, touch: isTouch() });
   else if (sc === 'map') { renderMap(c); drawTutorialNow(c); drawSummaryNow(c); if (G.paused) Art.drawPausePanel(c, { mode: 'map', touch: isTouch() }); }
@@ -2799,12 +2810,12 @@ function frameLoop(ts) {
   requestAnimationFrame(frameLoop);
   var dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 30) : 0;
   lastTs = ts;
-  try { update(dt); render(); } catch (err) { if (window.console) console.error(err); }
+  try { if (!(window.PVDX && PVDX.paused)) update(dt); render(); } catch (err) { if (window.console) console.error(err); }
 }
 function resize() {
   var cw = document.documentElement.clientWidth || window.innerWidth, ch = document.documentElement.clientHeight || window.innerHeight;
-  var s = Math.min(cw / W, ch / H);
-  var cssW = Math.max(1, Math.floor(W * s)), cssH = Math.max(1, Math.floor(H * s));
+  var s = Math.min(cw / CW, ch / H);
+  var cssW = Math.max(1, Math.floor(CW * s)), cssH = Math.max(1, Math.floor(H * s));
   DPR = window.devicePixelRatio || 1;
   canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px';
   canvas.width = Math.round(cssW * DPR); canvas.height = Math.round(cssH * DPR);

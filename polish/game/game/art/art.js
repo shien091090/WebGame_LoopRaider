@@ -11,6 +11,29 @@
   'use strict';
 
   var W = 1280, H = 720, TAU = Math.PI * 2;
+  // 畫布寬度依裝置: 電腦 1280, 觸控裝置 1280~1680(照可視區長寬比); 設計區 W = 1280 由 game.js 置中平移, 美術畫面都在設計區內
+  function pickWidth() {
+    var w = 1280;
+    try {
+      var q = /[?&]w=([0-9]+)/.exec(location.search);
+      var mm = function (s) { return !!(window.matchMedia && matchMedia(s).matches); };
+      var touch = /[?&]touch=1(&|$)/.test(location.search) || mm('(pointer: coarse)') ||
+        (((navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window) && !mm('(hover: hover)'));
+      if (q) w = +q[1];
+      else if (touch) {
+        var sc = window.screen || {}, sw = sc.width || 0, sh = sc.height || 0, iw = window.innerWidth || 0, ih = window.innerHeight || 0;
+        var r = sw > 0 && sh > 0 ? Math.max(sw, sh) / Math.min(sw, sh) : 0;
+        if (iw > ih && ih > 0) r = iw / ih;
+        if (r > 0) w = 720 * r;
+      }
+    } catch (e) { /* 取不到就用 1280 */ }
+    return Math.round(Math.max(1280, Math.min(1680, w || 1280)) / 2) * 2;
+  }
+  var VW = pickWidth();
+  try { document.documentElement.style.setProperty('--cw', String(VW)); } catch (e) { /* 略過 */ }
+  // 觸控模式(手機)字級下限: 玩家要讀的字至少畫布高的 1/35(約 21px), 按鍵徽章同步放大; 電腦版不動
+  var TOUCH_MIN = 21;
+  function tpx(px) { return (px < TOUCH_MIN && typeof window !== 'undefined' && window.PVDX && window.PVDX.on) ? TOUCH_MIN : px; }
   var FONT = '"Microsoft JhengHei","PingFang TC","Noto Sans TC","Heiti TC",sans-serif';
   var SIL = 0.2; // 目前縮放低於此值(大地圖縮圖 0.125)改畫剪影 / 色塊
 
@@ -101,13 +124,13 @@
   function scaleOf(ctx) {
     var a = 1, base = 1;
     try { if (ctx.getTransform) { var m = ctx.getTransform(); if (m && isFinite(m.a)) a = Math.hypot(m.a || 0, m.b || 0) || 1; } } catch (e) { a = 1; }
-    try { if (ctx.canvas && ctx.canvas.width > 0) base = ctx.canvas.width / W; } catch (e) { base = 1; }
+    try { if (ctx.canvas && ctx.canvas.width > 0) base = ctx.canvas.width / VW; } catch (e) { base = 1; }
     if (!isFinite(base) || base <= 0) base = 1;
     if (!isFinite(a) || a <= 0) a = 1;
     return { rel: a / base, abs: a };
   }
 
-  function font(px, bold) { return (bold ? 'bold ' : '') + Math.round(px) + 'px ' + FONT; }
+  function font(px, bold) { return (bold ? 'bold ' : '') + Math.round(tpx(px)) + 'px ' + FONT; }
   function text(ctx, s, x, y, px, col, align, bold, outline, oc) {
     ctx.font = font(px, bold); ctx.textAlign = align || 'left'; ctx.textBaseline = 'middle';
     if (outline) { ctx.lineJoin = 'round'; ctx.lineWidth = outline; ctx.strokeStyle = oc || 'rgba(20,12,6,0.95)'; ctx.strokeText(s, x, y); }
@@ -233,11 +256,12 @@
   }
   function keyShape(label) { return ARROW_ANG[label] !== undefined ? 'round' : ((label === 'Esc' || label === 'M') ? 'pill' : 'square'); }
   function keyFaceW(ctx, label, px) { // 徽章本體寬
+    px = tpx(px);
     var h = px * 1.5, s = keyShape(label);
     if (s === 'pill') return Math.max(h * 1.55, tw(ctx, label, px * 0.66, true) + px * 1.1);
     return s === 'round' ? h : px * 1.7;
   }
-  function keyW(ctx, label, px) { return Math.max(px * 1.7, keyFaceW(ctx, keyLabel(label), px)); } // 佔位寬
+  function keyW(ctx, label, px) { px = tpx(px); return Math.max(px * 1.7, keyFaceW(ctx, keyLabel(label), px)); } // 佔位寬
   function keyArrow(ctx, label, cx, cy, s, col) {
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(ARROW_ANG[label]);
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -251,7 +275,7 @@
     else rr(ctx, x, y, w, h, s === 'pill' ? h / 2 : h * 0.28);
   }
   function keycap(ctx, label, cx, cy, px, st) {
-    label = keyLabel(label); px = clamp(num(px, 16), 4, 200);
+    label = keyLabel(label); px = tpx(clamp(num(px, 16), 4, 200));
     if (st === true) st = 'hot'; else if (st !== 'hot' && st !== 'done' && st !== 'press') st = 'normal';
     var s = keyShape(label), w = keyFaceW(ctx, label, px), h = px * 1.5;
     var press = st === 'press', hot = st === 'hot' || st === 'done';
@@ -284,6 +308,7 @@
   // 一行嵌按鍵的文字。parts: 字串 / { key, st } / { t, col }(t = 指定顏色的字); tone 'board'(米白字 + 深描邊)| 'parch'(深墨字)
   // align 'left' | 'center' | 'right'; keyDy = 按鍵額外上下位移(輕彈用)。回傳整行寬
   function klineW(ctx, parts, px) {
+    px = tpx(px);
     var g = px * 0.2, total = 0, n = 0;
     for (var i = 0; i < parts.length; i++) {
       var p = parts[i], w;
@@ -296,7 +321,7 @@
     return total;
   }
   function kline(ctx, parts, x, y, px, align, tone, keyDy) {
-    parts = arr(parts); px = clamp(num(px, 16), 4, 200);
+    parts = arr(parts); px = tpx(clamp(num(px, 16), 4, 200));
     var g = px * 0.2, total = klineW(ctx, parts, px), n = 0;
     var col = tone === 'parch' ? K.ink : K.cream, ol = tone === 'parch' ? 0 : Math.max(2, px * 0.2);
     var cx = align === 'center' ? x - total / 2 : (align === 'right' ? x - total : x);
@@ -3927,7 +3952,7 @@
         matIcon(ctx, mat, v * v * pos[0] + 2 * v * u * mx + u * u * tg[0], v * v * pos[1] + 2 * v * u * my + u * u * tg[1], 18);
       }
     }
-    var s = st.touch === true ? '點擊畫面開始遊戲' : '按任意按鍵開始遊戲';
+    var s = st.touch === true ? '按 A 開始遊戲' : '按任意按鍵開始遊戲';
     ctx.globalAlpha = 0.775 + 0.225 * Math.cos(t * TAU / 1.2);
     text(ctx, s, 640, 668, 20, '#f2f4f8', 'center', true, 5, 'rgba(8,10,18,0.92)');
     ctx.restore();
@@ -4046,7 +4071,7 @@
     if (t >= 10.4) {
       var ph = t < 14 ? t : nowS();
       ctx.save(); ctx.globalAlpha *= 0.775 + 0.225 * Math.cos(ph * TAU / 1.2);
-      text(ctx, '按任意按鍵回到大地圖', 640, 660, 20, K.cream, 'center', true, 5, K.edge);
+      text(ctx, (window.PVDX && window.PVDX.on) ? '按 A 回到大地圖' : '按任意按鍵回到大地圖', 640, 660, 20, K.cream, 'center', true, 5, K.edge);
       ctx.restore();
     }
     var fi = 1 - seg(t, 0, 0.6);
@@ -4057,7 +4082,7 @@
   // ================= 匯出 =================
   var root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : this);
   root.Art = {
-    canvas: { width: W, height: H },
+    canvas: { width: VW, height: H },
     palette: PAL,
     themes: THEMES,
     // 字典級小圖示(說明 / 方案頁要重用時呼叫這裡, 不要另抄一份)

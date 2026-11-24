@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>icon-b 金環與素材堆</title>
+<style>body{margin:0;overflow:hidden;background:#000}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="512" height="512"></canvas>
+<script src="../game/art/art.js"></script>
+<script>
+// 圖示 B: 開始畫面的金色環道(關卡一圈圈重演)圍住一座素材堆(越堆越多)
+(function () {
+  var cv = document.getElementById('c'), ctx = cv.getContext('2d'), A = window.Art;
+  var S = 512, CX = 256, CY = 256, R = 172, TAU = Math.PI * 2, i;
+  function hash(a, b) { var h = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return h - Math.floor(h); }
+  // 背景: 開始畫面的深藍放射底 + 淡星點 + 放射光
+  var bg = ctx.createRadialGradient(CX, CY, 30, CX, CY, 380);
+  bg.addColorStop(0, '#2c3a62'); bg.addColorStop(0.55, '#18203a'); bg.addColorStop(1, '#0c1020');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, S, S);
+  ctx.save(); ctx.translate(CX, CY); ctx.fillStyle = 'rgba(255,230,160,0.05)';
+  for (i = 0; i < 12; i++) { var a = i * TAU / 12 + 0.1; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a - 0.08) * 400, Math.sin(a - 0.08) * 400); ctx.lineTo(Math.cos(a + 0.08) * 400, Math.sin(a + 0.08) * 400); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
+  for (i = 0; i < 40; i++) { ctx.fillStyle = 'rgba(255,255,255,' + (0.15 + hash(i, 3) * 0.3).toFixed(2) + ')'; ctx.beginPath(); ctx.arc(hash(i, 1) * S, hash(i, 2) * S, 0.8 + hash(i, 4) * 1.4, 0, TAU); ctx.fill(); }
+  // 環道: 深底 + 金色虛線 + 彗星光尾 + 箭頭(順時針)
+  ctx.lineCap = 'butt';
+  ctx.beginPath(); ctx.arc(CX, CY, R, 0, TAU); ctx.lineWidth = 46; ctx.strokeStyle = '#161220'; ctx.stroke();
+  ctx.lineWidth = 36; ctx.strokeStyle = '#2c2438'; ctx.stroke();
+  ctx.save(); ctx.setLineDash([16, 22]); ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(242,201,76,0.55)'; ctx.stroke(); ctx.restore();
+  var head = -Math.PI / 2 + 2.25, tail = 2.6;
+  for (i = 0; i < 24; i++) {
+    var a0 = head - tail * (1 - i / 24), a1 = head - tail * (1 - (i + 1) / 24);
+    ctx.beginPath(); ctx.arc(CX, CY, R, a0, a1 + 0.01); ctx.lineWidth = 10 + 22 * (i / 24);
+    ctx.strokeStyle = 'rgba(255,214,90,' + (0.08 + 0.85 * (i / 24)).toFixed(3) + ')'; ctx.stroke();
+  }
+  var hx = CX + Math.cos(head) * R, hy = CY + Math.sin(head) * R;
+  ctx.save(); ctx.translate(hx, hy); ctx.rotate(head + Math.PI / 2);
+  ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(-8, -30); ctx.lineTo(-8, 30); ctx.closePath();
+  ctx.fillStyle = '#fff3c0'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#8a6400'; ctx.stroke();
+  ctx.restore();
+  var hg = ctx.createRadialGradient(hx, hy, 0, hx, hy, 46);
+  hg.addColorStop(0, 'rgba(255,248,210,0.9)'); hg.addColorStop(1, 'rgba(255,214,90,0)');
+  ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(hx, hy, 46, 0, TAU); ctx.fill();
+  // 環內: 暖光 + 素材堆(遊戲裡的素材圖示放大)
+  var gl = ctx.createRadialGradient(CX, CY + 40, 10, CX, CY + 40, 150);
+  gl.addColorStop(0, 'rgba(255,214,90,0.55)'); gl.addColorStop(1, 'rgba(255,214,90,0)');
+  ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(CX, CY, 150, 0, TAU); ctx.fill();
+  ctx.save(); ctx.translate(CX, CY + 98); ctx.scale(1, 0.24); ctx.beginPath(); ctx.arc(0, 0, 120, 0, TAU); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fill(); ctx.restore();
+  var heap = [
+    ['wood', -76, 66, 86], ['stone', 0, 72, 90], ['crystal', 76, 66, 86],
+    ['core', -40, 6, 86], ['wood', 42, 8, 84],
+    ['crystal', 0, -60, 96]
+  ];
+  heap.forEach(function (m) { A.icons.mat(ctx, m[0], CX + m[1], CY + m[2], m[3]); });
+  // 堆頂閃光
+  ctx.fillStyle = '#fffbe8';
+  [[CX + 44, CY - 104, 12], [CX - 58, CY - 48, 8]].forEach(function (s) {
+    ctx.beginPath(); ctx.moveTo(s[0], s[1] - s[2]); ctx.lineTo(s[0] + s[2] * 0.3, s[1] - s[2] * 0.3); ctx.lineTo(s[0] + s[2], s[1]); ctx.lineTo(s[0] + s[2] * 0.3, s[1] + s[2] * 0.3);
+    ctx.lineTo(s[0], s[1] + s[2]); ctx.lineTo(s[0] - s[2] * 0.3, s[1] + s[2] * 0.3); ctx.lineTo(s[0] - s[2], s[1]); ctx.lineTo(s[0] - s[2] * 0.3, s[1] - s[2] * 0.3); ctx.closePath(); ctx.fill();
+  });
+})();
+</script>
+</body>
+</html>

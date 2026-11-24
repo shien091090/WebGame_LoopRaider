@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>banner-c 斷門決戰</title>
+<style>body{margin:0;overflow:hidden;background:#000}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="1680" height="720"></canvas>
+<script src="../game/art/art.js"></script>
+<script>
+// 橫幅 C: 鹽原斷門的最終戰, 守門巨像佔右半邊、紅眼蓄力; 三職業在左中圍攻, 劍士躍起砍向卡住發黃光(破綻)的左拳
+(function () {
+  var cv = document.getElementById('c'), ctx = cv.getContext('2d'), A = window.Art;
+  var BW = 1680, GY = 600, K = 3.2, i;
+  function at(x, y, k, fn) { ctx.save(); ctx.translate(x, y); ctx.scale(k, k); fn(); ctx.restore(); }
+  function shadow(x, rx) { ctx.save(); ctx.translate(x, GY + 2); ctx.scale(1, 0.18); ctx.beginPath(); ctx.arc(0, 0, rx, 0, Math.PI * 2); ctx.fillStyle = 'rgba(40,10,40,0.3)'; ctx.fill(); ctx.restore(); }
+  // 背景: 遊戲的鹽原背景(純場景)橫向拉伸到 1680
+  ctx.save(); ctx.scale(BW / 1280, 1); A.drawBackground(ctx, { theme: 'salt', t: 0 }); ctx.restore();
+  // 巨像身後的紅暈
+  var rg = ctx.createRadialGradient(1200, 300, 40, 1200, 300, 420);
+  rg.addColorStop(0, 'rgba(255,90,60,0.35)'); rg.addColorStop(1, 'rgba(255,90,60,0)');
+  ctx.fillStyle = rg; ctx.fillRect(780, 0, 900, 720);
+  // 地面: 鹽原地形格放大 2 倍, 頂緣 y = 600
+  ctx.save(); ctx.scale(2, 2);
+  for (i = 0; i < 22; i++) { A.drawGround(ctx, { x: i * 40 + 20, y: GY / 2 + 20, theme: 'salt', open: { n: true } }); }
+  ctx.restore();
+  // 守門巨像: 第 1 階段、眼睛蓄力(聚光線)、左拳砸地卡住 = 破綻
+  shadow(1200, 260);
+  A.drawColossus(ctx, {
+    hx: 1200, hy: 290, phase: 1, eye: 0.55, lid: 0, split: 0, weak: 'fist', angry: true,
+    lf: { x: 1010, y: 548, rot: 0.06, stuck: true }, rf: { x: 1405, y: 395, rot: -0.15 },
+    plFall: 0, roar: 0, steam: 0, hit: false, ko: false, t: 0.42
+  });
+  // 主角三人
+  var hy = GY - 18 * K;
+  shadow(600, 44); shadow(745, 44); shadow(880, 36);
+  at(600, hy, K, function () { A.drawPlayer(ctx, { x: 0, y: 0, cls: 'bomber', facing: 1, pose: 'throw', poseT: 0.1 }); });
+  at(745, hy, K, function () { A.drawPlayer(ctx, { x: 0, y: 0, cls: 'hunter', facing: 1, pose: 'idle', poseT: 0 }); });
+  at(872, 440, K, function () { A.drawPlayer(ctx, { x: 0, y: 0, cls: 'sword', facing: 1, pose: 'slash', poseT: 0.06, swingIdx: 0 }); });
+  // 飛行物: 箭射向巨像的眼、炸彈飛向右拳
+  at(960, 300, K, function () { A.drawArrow(ctx, { x: 0, y: 0, angle: -0.08 }); });
+  at(735, 330, K, function () { A.drawBomb(ctx, { x: 0, y: 0, t: 0.3, radius: 0, danger: false }); });
+  // 破綻拳旁掉出的魔核與水晶
+  [['core', 905, 600 - 70, 44], ['crystal', 1130, 470, 40]].forEach(function (m) { A.icons.mat(ctx, m[0], m[1], m[2], m[3]); });
+})();
+</script>
+</body>
+</html>

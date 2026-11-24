@@ -2,12 +2,13 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>回放冒險</title>
+<title>橫向戰鬥＋放置</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
 body { display: flex; align-items: center; justify-content: center; }
-canvas { display: block; background: #000; }
+canvas { display: block; background: #000; width: min(100vw, calc(100vh * var(--cw, 1280) / 720)); height: auto; aspect-ratio: var(--cw, 1280) / 720; }
+@supports (height: 100dvh) { canvas { width: min(100vw, calc(100dvh * var(--cw, 1280) / 720)); } }
 </style>
 </head>
 <body>
@@ -16,5 +17,6 @@ canvas { display: block; background: #000; }
 <script src="audio/sound.js"></script>
 <script src="levels.js"></script>
 <script src="game.js"></script>
+<script src="touch.js"></script>
 </body>
 </html>

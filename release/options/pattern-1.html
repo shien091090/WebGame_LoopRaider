@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>pattern-1 素材紋(金)</title>
+<style>body{margin:0;overflow:hidden;background:#e0c64f}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="256" height="256"></canvas>
+<script>
+// 色帶圖樣 1: 底色 #e0c64f; 紋路取遊戲的四種素材剖面(木材年輪、石塊、水晶、魔核)+ 環道金點, 同色系低對比
+// 間距 64 整除 256, 每個圖形在 ±256 都補畫一份 → 四邊無縫
+(function () {
+  var BG = '#e0c64f', INK = '#d3b944';
+  var ctx = document.getElementById('c').getContext('2d'), S = 256, TAU = Math.PI * 2;
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, S, S);
+  function wood(x, y) { ctx.beginPath(); ctx.arc(x, y, 13, 0, TAU); ctx.fillStyle = INK; ctx.fill(); ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.lineWidth = 2.5; ctx.strokeStyle = BG; ctx.stroke(); }
+  function stone(x, y) {
+    ctx.beginPath(); ctx.moveTo(x, y - 14); ctx.lineTo(x + 13, y - 7); ctx.lineTo(x + 13, y + 7); ctx.lineTo(x, y + 14); ctx.lineTo(x - 13, y + 7); ctx.lineTo(x - 13, y - 7); ctx.closePath();
+    ctx.fillStyle = INK; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x - 13, y - 7); ctx.lineTo(x, y); ctx.lineTo(x + 13, y - 7); ctx.moveTo(x, y); ctx.lineTo(x, y + 14); ctx.lineWidth = 2.5; ctx.strokeStyle = BG; ctx.stroke();
+  }
+  function crystal(x, y) {
+    ctx.beginPath(); ctx.moveTo(x, y - 16); ctx.lineTo(x + 9, y - 5); ctx.lineTo(x + 6, y + 14); ctx.lineTo(x - 6, y + 14); ctx.lineTo(x - 9, y - 5); ctx.closePath();
+    ctx.fillStyle = INK; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x, y - 16); ctx.lineTo(x, y + 14); ctx.lineWidth = 2; ctx.strokeStyle = BG; ctx.stroke();
+  }
+  function core(x, y) { ctx.beginPath(); ctx.arc(x, y, 12, 0, TAU); ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke(); ctx.beginPath(); ctx.arc(x, y, 4.5, 0, TAU); ctx.fillStyle = INK; ctx.fill(); }
+  function dot(x, y) { ctx.beginPath(); ctx.arc(x, y, 3, 0, TAU); ctx.fillStyle = INK; ctx.fill(); }
+  var SH = [wood, stone, crystal, core];
+  function tile(fn, x, y) { for (var dx = -S; dx <= S; dx += S) for (var dy = -S; dy <= S; dy += S) fn(x + dx, y + dy); }
+  // 4×4 格, 每格 64; 奇數列錯開 32; 圖形依位置輪替; 格角放環道金點
+  for (var r = 0; r < 4; r++) for (var c = 0; c < 4; c++) {
+    var x = c * 64 + 32 + (r % 2) * 32, y = r * 64 + 32;
+    tile(SH[(c + r * 2) % 4], x, y);
+    tile(dot, x + 32, y + 32);
+  }
+})();
+</script>
+</body>
+</html>

@@ -326,7 +326,9 @@ function lockFor(sec, fn) { G.lockT = sec; G.lockFn = fn; }
 // ---- 地圖 1 / 準備 1(按 Z 後先播 0.3 秒完成特效, 播完才換畫面)
 function tutMapPickOpen() {
   T.stage = 'pick';
-  tutOpen('map_pick', 'map', '選擇這一關', 440, 134, 'above', [tutArrow(480, 263, 480, 349, 'bottom', 440)], '進入');
+  // 觸控模式第 1 關卡在 (290,274)~(450,456), 中心 x 370: 板子與箭頭照電腦版相對卡片的位置平移
+  if (isTouch()) tutOpen('map_pick', 'map', '選擇這一關', 330, 127, 'above', [tutArrow(370, 256, 370, 365, 'bottom', 330)], '進入');
+  else tutOpen('map_pick', 'map', '選擇這一關', 440, 134, 'above', [tutArrow(480, 263, 480, 349, 'bottom', 440)], '進入');
 }
 function tutPrepOpen() {
   T.stage = 'prep';
@@ -564,15 +566,21 @@ function gateTick() {
 function tutStartReplay() {
   if (T.off || T.rep) return;
   T.rep = 1; T.stage = 'replay'; T.lockMap = true; T.flightSeen = false; T.branch = null;
-  tutOpen('map_replay', 'map', '接著會不斷重演剛剛的通關歷程', 470, 575, 'below', [tutArrow(466, 429, 480, 349, 'top', 374)]);
+  // 觸控模式: 照電腦版相對第 1 關卡(中心 (370,365)、卡底 456)的位置平移; 大地圖被教學鎖住時不畫方向鍵
+  if (isTouch()) tutOpen('map_replay', 'map', '接著會不斷重演剛剛的通關歷程', 360, 591, 'below', [tutArrow(356, 468, 370, 365, 'top', 264)]);
+  else tutOpen('map_replay', 'map', '接著會不斷重演剛剛的通關歷程', 470, 575, 'below', [tutArrow(466, 429, 480, 349, 'top', 374)]);
 }
 function tutToUpgrade() {
   T.stage = 'upgrade';
-  tutOpen('map_upgrade', 'map', '[升級所]可以解鎖新職業、提升角色能力', 305, 140, 'above', [tutArrow(250, 218, 150, 218, 'bottom', 447)], '繼續');
+  // 觸控模式升級所卡在 (62,52)~(238,188), 上方沒有空間放板子: 電腦版的一行板子上下翻到卡片下方(x 同電腦版), 箭頭從板子上緣往左上指卡片右緣
+  if (isTouch()) tutOpen('map_upgrade', 'map', '[升級所]可以解鎖新職業、提升角色能力', 305, 198, 'below', [tutArrow(250, 120, 150, 120, 'top', 447)], '繼續');
+  else tutOpen('map_upgrade', 'map', '[升級所]可以解鎖新職業、提升角色能力', 305, 140, 'above', [tutArrow(250, 218, 150, 218, 'bottom', 447)], '繼續');
 }
 function tutToShop() {
   T.stage = 'shop';
-  tutOpen('map_shop', 'map', '[商店]可以購買裝置,裝置可以\n安裝在關卡中,提升素材產量', 245, 576, 'below', [tutArrow(250, 498, 150, 498, 'top', 438)], '繼續');
+  // 觸控模式商店卡在 (62,214)~(238,350): 電腦版的兩行板子與箭頭照相對卡片的位置往上平移 216
+  if (isTouch()) tutOpen('map_shop', 'map', '[商店]可以購買裝置,裝置可以\n安裝在關卡中,提升素材產量', 245, 360, 'below', [tutArrow(250, 282, 150, 282, 'top', 438)], '繼續');
+  else tutOpen('map_shop', 'map', '[商店]可以購買裝置,裝置可以\n安裝在關卡中,提升素材產量', 245, 576, 'below', [tutArrow(250, 498, 150, 498, 'top', 438)], '繼續');
 }
 function tutToSummary() {
   T.stage = 'summary'; T.arrows = []; T.bub = null; T.sum = { openT: 0, closing: false, closeT: 0.3, cards: 0 };
@@ -588,7 +596,9 @@ function replayTick() {
     else if (b.done && b.doneT >= 3.0) {
       T.branch = 'b';
       tutSwap(function () {
-        tutOpen('map_slow', 'map', '但這次通關花比較多時間,\n[素材累積的比較慢],可以考慮重刷一次關卡', 470, 575, 'below', [tutArrow(543, 411, 540, 395, 'top', 592)], '繼續');
+        // 觸控模式: 秒數右緣在第 1 關卡 (442, 371); 電腦版的兩行板子與箭頭照相對秒數的位置平移
+        if (isTouch()) tutOpen('map_slow', 'map', '但這次通關花比較多時間,\n[素材累積的比較慢],可以考慮重刷一次關卡', 352, 551, 'below', [tutArrow(425, 387, 422, 371, 'top', 474)], '繼續');
+        else tutOpen('map_slow', 'map', '但這次通關花比較多時間,\n[素材累積的比較慢],可以考慮重刷一次關卡', 470, 575, 'below', [tutArrow(543, 411, 540, 395, 'top', 592)], '繼續');
       });
       return;
     }
@@ -1926,7 +1936,11 @@ function checkBossOpen() {
 function clearKeys() { keys.left = keys.right = keys.up = false; edge.z = edge.x = edge.down = edge.jump = edge.jumpRel = false; }
 
 // ---------------------------------------------------------------- 回放
-function thumbPos(l, x, y) { return [CARD_POS[l][0] + 8 + x * 0.125, CARD_POS[l][1] + 8 + y * 0.125]; }
+// 觸控模式縮圖在卡片 (16,8)、0.8 倍(128×72)
+function thumbPos(l, x, y) {
+  if (isTouch()) return [CARD_POS[l][0] + 16 + x * 0.1, CARD_POS[l][1] + 8 + y * 0.1];
+  return [CARD_POS[l][0] + 8 + x * 0.125, CARD_POS[l][1] + 8 + y * 0.125];
+}
 var ICON_X = { wood: 36, stone: 206, crystal: 376, core: 546 };
 function flyMode() { return G.screen === 'map' && !G.paused; }
 function spawnGain(l, kind, amt, x, y) {
@@ -2027,8 +2041,15 @@ function firstBuyableShopRow() {
 }
 // 欄由左到右: 營地(升級所、商店) / 第 1 關 / 第 2、3 關 / 第 4~7 關 / 第 8 關
 var MAP_COLS = [[8, 9], [0], [1, 2], [3, 4, 5, 6], [7]];
-function cardCY(i) { return CARD_POS[i][1] + 68; }
+// 卡片垂直中心: 關卡卡電腦版高 136、觸控模式 152(名稱條兩行); 升級所 / 商店卡固定 136
+function cardHalf(i) { return (isTouch() && i < 8) ? 91 : 68; }
+function cardWid(i) { return (isTouch() && i < 8) ? 160 : 176; }
+// 觸控模式的欄: 第 4~7 關分成兩欄(第 4、6 關 / 第 5、7 關)
+var MAP_COLS_TOUCH = [[8, 9], [0], [1, 2], [3, 6], [4, 5], [7]];
+function mapCols() { return isTouch() ? MAP_COLS_TOUCH : MAP_COLS; }
+function cardCY(i) { return CARD_POS[i][1] + cardHalf(i); }
 function mapMove(dx, dy) {
+  var MAP_COLS = mapCols();
   var s = G.mapSel, ci = 0, i, moved = false;
   MAP_COLS.forEach(function (col, k) { if (col.indexOf(s) >= 0) ci = k; });
   if (dy) {
@@ -2484,7 +2505,8 @@ function getThumb(l) {
 function drawThumb(c, l, S, taken, chestOpen) {
   var L = LEVELS[l], p = CARD_POS[l];
   c.save();
-  c.translate(p[0] + 8, p[1] + 8);
+  if (isTouch()) { c.translate(p[0] + 16, p[1] + 8); c.scale(0.8, 0.8); } // 觸控模式縮圖 0.8 倍
+  else c.translate(p[0] + 8, p[1] + 8);
   c.beginPath(); c.rect(0, 0, 160, 90); c.clip();
   var cv = getThumb(l);
   if (cv) c.drawImage(cv, 0, 0, 160, 90);
@@ -2539,7 +2561,9 @@ function liveOverlap(x, y, w, h) {
 function fadeToward(v, target, dt) { return v < target ? Math.min(target, v + 6 * dt) : Math.max(target, v - 6 * dt); }
 function fadeStep(dt) {
   if (G.screen === 'play' && R) {
-    G.fPanel = fadeToward(G.fPanel, (T.demo >= 2 && ctrlPanelVisible() && liveOverlap(93, 122, 170, 144)) ? 0.3 : 1, dt);
+    // 操作方式面板收在左上角的範圍: 電腦 0.6 倍(150×136), 觸控模式不縮小(250×226)
+    var cpB = isTouch() ? [143, 167, 270, 240] : [93, 122, 170, 144];
+    G.fPanel = fadeToward(G.fPanel, (T.demo >= 2 && ctrlPanelVisible() && liveOverlap(cpB[0], cpB[1], cpB[2], cpB[3])) ? 0.3 : 1, dt);
     G.fSnd = fadeToward(G.fSnd, liveOverlap(R.snd.x, R.snd.y, 36, 36) ? 0.3 : 1, dt);
   } else { G.fPanel = 1; G.fSnd = 1; }
 }
@@ -2547,6 +2571,14 @@ function drawSoundIcon(c) {
   if (isTouch() || (T.sum && G.screen === 'map')) return;
   var inLv = !!R && (G.screen === 'play' || G.screen === 'result' || G.screen === 'fail');
   Art.drawSoundIcon(c, { x: inLv ? R.snd.x : 1250, y: inLv ? R.snd.y : 62, on: !G.muted, alpha: inLv ? G.fSnd : 1 });
+}
+// 觸控模式: 「按 ↓ 完成關卡」板子(底 y−8、高 48)和右下 A 鈕(觸控層 LAYOUT.a: 中心 y 568、半徑 72, 可按範圍 +16)同高時, 右緣停在 A 鈕左邊
+function goalPromptMaxR(y) {
+  if (!isTouch()) return 1272;
+  var top = y - 56, bot = y - 8;
+  if (bot < 568 - 88 || top > 568 + 88) return 1272;
+  var ax = CW - Math.max(OX / 2, 92) - OX;   // A 鈕中心(設計座標)
+  return Math.min(1272, ax - 88 - 6);
 }
 // 關卡畫面(世界部分, 不含資訊列): mode 'run' 一般 | 'clear' 過關動畫(以焦點放大) | 'dead' 死亡動畫(不畫玩家)
 function liveScene(c, mode) {
@@ -2561,7 +2593,7 @@ function liveScene(c, mode) {
   drawScene(c, { L: R.L, rep: R.rep, S: S, mode: 'live', taken: function (id) { return R.taken[id] !== undefined; }, chestOpen: R.chestOpen,
     fog: function (i) { return R.rep[i] ? -1 : 0; }, build: function (i) { return 0.6; }, noPlayer: dead, noRings: dead || cl, cheering: cl && R.cT >= 0, cheerT: cl ? Math.max(0, R.cT) : undefined });
   var g = R.L.goal, gActive = !g.hidden || R.goalFall >= 0.5;
-  if (mode === 'run' && R.atGoal && R.state === 'run' && gActive) Art.drawGoalPrompt(c, { x: g.x, y: g.y - 40, t: G.t });
+  if (mode === 'run' && R.atGoal && R.state === 'run' && gActive) Art.drawGoalPrompt(c, { x: g.x, y: g.y - 40, t: G.t, maxR: goalPromptMaxR(g.y - 40) });
   R.popups.forEach(function (p) { Art.drawPopup(c, { x: p.x, y: p.y, t: p.t, dur: 0.8, kind: p.kind, value: p.value }); });
   R.chainTexts.forEach(function (p) { Art.drawChainText(c, { x: p.x, y: p.y, n: p.n, t: p.t, dur: 0.8 }); });
   if (cl) c.restore();
@@ -2593,10 +2625,23 @@ function cardRegions(l) {
   });
   return regs;
 }
+// 觸控模式: 升級所 / 商店卡上移, 讓出左下角給方向鍵(原位置 (62,430) 會被方向鍵整張蓋住);
+// 關卡卡改成 160×182(名稱條三行: 名稱 + 秒數 / 木材 石頭 / 水晶 魔核, 字 21px、素材圖示 30px), 以 y 365 為中線上下對稱:
+//   第 1 關 (290,274) 在最左(壓在營地的橋頭上), 分出第 2 關 (515,46) / 第 3 關 (515,502);
+//   第 2 關分出第 4 關 (720,170)、第 5 關 (895,46), 第 3 關分出第 7 關 (720,378)、第 6 關 (895,502)(近的子卡在第 3 欄、遠的在第 4 欄);
+//   第 4~7 關匯到第 8 關 (1112,274)。每條連線都從來源卡右緣中點畫到目標卡左緣中點, 離其他卡片至少 33px、互不交叉
+//   (2→5、3→6 從第 4 / 7 關的上 / 下方 33px 外水平通過; 4、7→8 從第 4 欄兩張卡中間通過)。
+//   卡片 160 寬 × 4~5 欄塞在 x 290~1272 內, 欄間只剩 45~57px: 第 1→2 / 3、第 5 / 6→8 關的連線較陡(高低差 228)
+var CARD_POS_TOUCH = [[290, 274], [515, 46], [515, 502], [720, 170], [895, 46], [895, 502], [720, 378], [1112, 274], [62, 52], [62, 214]];
+function touchCardPos() {
+  if (!isTouch()) return;
+  for (var i = 0; i < CARD_POS_TOUCH.length; i++) CARD_POS[i] = CARD_POS_TOUCH[i].slice();
+}
 function renderMap(c) {
+  touchCardPos();
   Art.drawMapBackground(c, { t: G.t });
   [[0, 1], [0, 2], [1, 3], [1, 4], [2, 5], [2, 6], [3, 7], [4, 7], [5, 7], [6, 7]].forEach(function (e) {
-    Art.drawMapLink(c, { x1: CARD_POS[e[0]][0] + 176, y1: CARD_POS[e[0]][1] + 68, x2: CARD_POS[e[1]][0], y2: CARD_POS[e[1]][1] + 68, lit: !!G.rec[e[0]] });
+    Art.drawMapLink(c, { x1: CARD_POS[e[0]][0] + cardWid(e[0]), y1: cardCY(e[0]), x2: CARD_POS[e[1]][0], y2: cardCY(e[1]), lit: !!G.rec[e[0]] });
   });
   var left7 = 0, i;
   for (i = 0; i < 7; i++) if (!G.rec[i]) left7++;
@@ -2615,7 +2660,7 @@ function renderMap(c) {
       drawThumb(c, l, S, function (id) { return rec.pickF[id] !== undefined && rec.pickF[id] <= fi; }, rec.chestF >= 0 ? fi >= rec.chestF : G.chestTaken[l]);
       rp = Math.max(0, Math.min(1, G.rp[l].pos / Math.max(1, rec.N))); marks = rec.marks;
     }
-    Art.drawCardOverlay(c, { x: CARD_POS[l][0], y: CARD_POS[l][1], speedMul: rec ? speedMul(l) : 1, newArea: !!rec && rec.ver < G.repairVer[l], selected: G.mapSel === l, replayP: rp, marks: marks,
+    Art.drawCardOverlay(c, { x: CARD_POS[l][0], y: CARD_POS[l][1], live: built, speedMul: rec ? speedMul(l) : 1, newArea: !!rec && rec.ver < G.repairVer[l], selected: G.mapSel === l, replayP: rp, marks: marks,
       regions: (built && LEVELS[l].sites.length) ? cardRegions(l) : [] });
   }
   Art.drawWorkshopCard(c, { x: CARD_POS[8][0], y: CARD_POS[8][1], anyAffordable: anyAffordable(), allDone: allUpgraded(), selected: G.mapSel === 8 });
@@ -2625,8 +2670,9 @@ function renderMap(c) {
     Art.drawFlyingMaterial(c, { x: pp[0], y: pp[1], kind: f.kind, t: f.t, dur: 0.7 });
   });
   Art.drawHud(c, hudState('map'));
-  if (!T.lockMap) {
-    var kl = [{ key: 'up' }, { key: 'down' }, { key: 'left' }, { key: 'right' }, ' 選擇  ', { key: 'z' }, ' 確定'];
+  // 觸控模式: 準備頁 / 商店 / 升級所蓋在大地圖上時, 不畫大地圖自己的操作列(面板有自己的)
+  if (!T.lockMap && !(isTouch() && G.screen !== 'map')) {
+    var kl =[{ key: 'up' }, { key: 'down' }, { key: 'left' }, { key: 'right' }, ' 選擇  ', { key: 'z' }, ' 確定'];
     if (!isTouch()) kl.push('  ', { key: 'esc' }, ' 暫停  ', { key: 'm' }, ' 靜音');
     Art.drawKeyLine(c, { x: 440, y: 702, align: 'left', px: 16, parts: kl, tone: 'board' });
   }

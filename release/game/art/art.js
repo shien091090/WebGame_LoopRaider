@@ -33,6 +33,7 @@
   try { document.documentElement.style.setProperty('--cw', String(VW)); } catch (e) { /* 略過 */ }
   // 觸控模式(手機)字級下限: 玩家要讀的字至少畫布高的 1/35(約 21px), 按鍵徽章同步放大; 電腦版不動
   var TOUCH_MIN = 21;
+  function isTouchOn() { return typeof window !== 'undefined' && !!window.PVDX && !!window.PVDX.on; }
   function tpx(px) { return (px < TOUCH_MIN && typeof window !== 'undefined' && window.PVDX && window.PVDX.on) ? TOUCH_MIN : px; }
   var FONT = '"Microsoft JhengHei","PingFang TC","Noto Sans TC","Heiti TC",sans-serif';
   var SIL = 0.2; // 目前縮放低於此值(大地圖縮圖 0.125)改畫剪影 / 色塊
@@ -353,7 +354,7 @@
   }
   // 動作章內嵌按鍵: 章 = 'hot' 金底 / 'idle' 米白 / 'off' 灰 + 紅斜線(付不起); 章內「[鍵] 動作」
   function actKey(ctx, key, s, x, y, state, align, px) {
-    px = px || 12;
+    px = tpx(px || 12); // 觸控模式字級拉到下限時, 底框跟著放大
     var inner = klineW(ctx, [{ key: key }, s], px), w = inner + px * 1.0, h = px * 1.95;
     var lx = align === 'right' ? x - w : (align === 'center' ? x - w / 2 : x);
     ctx.save();
@@ -443,6 +444,7 @@
   // 花費: 只畫大於 0 的種類; 逐項比對 stock, 不足的那一種數字變紅 + 紅底「缺 N」。回傳 { w, ok }
   function costLine(ctx, cost, stock, x, y, px, align, inkCol, measureOnly) {
     var c = mats(cost), s = mats(stock), items = [], i;
+    px = tpx(px); // 觸控模式字級拉到下限時, 圖示與「缺」標籤跟著放大, 不互相疊到
     for (i = 0; i < KINDS.length; i++) { var k = KINDS[i], v = Math.round(clamp(c[k], 0, 1e9)); if (v > 0) items.push([k, v, s[k] < v ? v - Math.max(0, Math.floor(s[k])) : 0]); }
     var isz = px * 1.25, ws = [], total = 0, ok = true;
     for (i = 0; i < items.length; i++) {
@@ -475,7 +477,7 @@
     ctx.restore();
   }
   function newAreaChip(ctx, x, y, align, s, px) {
-    px = px || 11; s = s || '修好後還沒跑過';
+    px = tpx(px || 11); s = s || '修好後還沒跑過'; // 觸控模式字級拉到下限時底框跟著放大
     var w = tw(ctx, s, px, true) + 14, lx = align === 'right' ? x - w : (align === 'center' ? x - w / 2 : x);
     rr(ctx, lx, y - px * 0.9, w, px * 1.8, 4); ctx.fillStyle = PAL.newArea; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffffff'; ctx.stroke();
     text(ctx, s, lx + w / 2, y + 0.5, px, '#ffffff', 'center', true);
@@ -847,9 +849,11 @@
     // 小路: 升級所 ↔ 商店(150, 286~430), 中間 y=349 分岔往右接橋
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.strokeStyle = '#6e5a40'; ctx.lineWidth = 22;
-    ctx.beginPath(); ctx.moveTo(150, 286); ctx.lineTo(150, 430); ctx.moveTo(150, 349); ctx.lineTo(330, 349); ctx.stroke();
+    // 觸控模式: 升級所 / 商店卡上移到 (62,52) / (62,214)(讓出左下方向鍵), 小路改成 188~349
+    var pT = isTouchOn() ? 188 : 286, pB = isTouchOn() ? 349 : 430;
+    ctx.beginPath(); ctx.moveTo(150, pT); ctx.lineTo(150, pB); ctx.moveTo(150, 349); ctx.lineTo(330, 349); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,230,180,0.12)'; ctx.lineWidth = 2; ctx.setLineDash([6, 8]);
-    ctx.beginPath(); ctx.moveTo(150, 290); ctx.lineTo(150, 426); ctx.moveTo(160, 349); ctx.lineTo(310, 349); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(150, pT + 4); ctx.lineTo(150, pB - 4); ctx.moveTo(160, 349); ctx.lineTo(310, 349); ctx.stroke(); ctx.setLineDash([]);
     mapLamp(ctx, 36, 372, t); mapLamp(ctx, 262, 330, t); mapLamp(ctx, 262, 140, t); mapLamp(ctx, 36, 600, t);
     ctx.restore();
     // ---- 河: 由上到下, 中線 x = 330 + 10 sin(y/70)、寬 44; 冷深藍(不用水晶青)+ 兩岸描邊 + 小波紋 ----
@@ -1382,11 +1386,13 @@
   function drawGoalPrompt(ctx, st) {
     st = obj(st);
     var x = num(st.x, 640), y = num(st.y, 360), t = num(st.t, 0);
-    var bw = 200, bh = 48, bx = clamp(x - bw / 2, 8, 1272 - bw), by = y - 8 - bh, cx = bx + bw / 2, cy = by + bh / 2;
+    // maxR: 板子右緣上限(觸控模式由 game.js 傳入, 讓開右下 A 鈕); 板子被推開時尖角改從板子底邊最近處斜指旗子
+    var bw = 200, bh = 48, bx = clamp(x - bw / 2, 8, Math.min(1272, num(st.maxR, 1272)) - bw), by = y - 8 - bh, cx = bx + bw / 2, cy = by + bh / 2;
+    var tx = clamp(x, bx + 18, bx + bw - 18);
     ctx.save();
-    poly(ctx, [x - 9, by + bh - 1, x + 9, by + bh - 1, x, y - 2]); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = K.edge; ctx.stroke();
+    poly(ctx, [tx - 9, by + bh - 1, tx + 9, by + bh - 1, x, y - 2]); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = K.edge; ctx.stroke();
     rr(ctx, bx, by, bw, bh, 8); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = K.edge; ctx.stroke();
-    ctx.fillStyle = K.parch; ctx.fillRect(x - 7.5, by + bh - 3, 15, 4);
+    ctx.fillStyle = K.parch; ctx.fillRect(tx - 7.5, by + bh - 3, 15, 4);
     // 「按 [↓] 完成關卡」: ↓ 用按鍵外觀嵌在句中(金面 = 此刻按得下去), 輕輕上下彈
     var bob = Math.sin(t * TAU / 0.6) * 1.5;
     kline(ctx, ['按', { key: 'down', st: 'hot' }, '完成關卡'], cx, cy, 18, 'center', 'parch', bob - 1);
@@ -2224,7 +2230,10 @@
       ctx.restore();
       ctx.save(); ctx.translate(x0 + 20, 20); ctx.scale(1 + 0.25 * s, 1 - 0.2 * s); matIcon(ctx, k, 0, 0, 22); ctx.restore();
       ctx.save(); ctx.translate(x0 + 36, 21); ctx.scale(1 + 0.3 * s, 1 + 0.3 * s); text(ctx, intStr(stock[k]), 0, 0, 19, K.ink, 'left', true); ctx.restore();
-      text(ctx, '+' + fmt1(clamp(rate[k], 0, 1e6)) + '/分', x0 + 157, 21, 11, KIND_INK[k], 'right', true);
+      var rs = '+' + fmt1(clamp(rate[k], 0, 1e6)) + '/分';
+      // 觸控模式: 產量字拉到 21px 後會撞到庫存數字, 寬度不夠時水平壓縮進庫存數字右邊的空間
+      if (isTouchOn()) fitText(ctx, rs, x0 + 157, 21, 11, KIND_INK[k], Math.max(40, 157 - 36 - tw(ctx, intStr(stock[k]), 19, true) - 8), 'right');
+      else text(ctx, rs, x0 + 157, 21, 11, KIND_INK[k], 'right', true);
       if (on) { // 投幣火花(至多 12px, 可超出資訊列下緣)
         ctx.save(); ctx.globalAlpha *= 1 - bq; ctx.strokeStyle = PAL[k + 'Light']; ctx.lineWidth = 2; ctx.lineCap = 'round';
         for (var j = 0; j < 5; j++) { var a = -Math.PI * (0.1 + j * 0.2), r1 = 11 + bq * 4, r2 = 14 + bq * 10; ctx.beginPath(); ctx.moveTo(x0 + 20 + Math.cos(a) * r1, 20 + Math.sin(a) * r1); ctx.lineTo(x0 + 20 + Math.cos(a) * r2, 20 + Math.sin(a) * r2); ctx.stroke(); }
@@ -2640,7 +2649,7 @@
     st = obj(st);
     var T = clamp(num(st.T, 3.2), 0, 3.2), waitZ = st.waitZ === true, dockT = st.dockT == null ? null : clamp(num(st.dockT, 0.95), 0, 0.95);
     var px = num(st.px, 100), py = num(st.py, 462), al = clamp(num(st.alpha, 1), 0, 1), t = num(st.t, 0);
-    var BW = CP.BW, BH = CP.BH, KF = CP.KF, FX = CP.FX, FY = CP.FY, i;
+    var BW = CP.BW, BH = CP.BH, KF = isTouchOn() ? 1 : CP.KF, FX = CP.FX, FY = CP.FY, i; // 觸控模式: 收到左上角後不縮小(縮 0.6 倍字只剩 13px)
     // 原尺寸位置: 紙底在角色頭頂上方 14px(py − 32), 水平置中在角色, 含木軸外框左緣 ≥ 12
     var BIGX = clamp(px - BW / 2, 29, W - 29 - BW), BIGY = clamp(py - 32 - BH, 56, H - BH - 20);
     function pathAt(s) { var cx = Math.max(24, BIGX - 40), cy = 60, u = 1 - s; /* 上拱弧線; 控制點不往左越過 x 24 */ return { x: u * u * BIGX + 2 * u * s * cx + s * s * FX, y: u * u * BIGY + 2 * u * s * cy + s * s * FY }; }
@@ -2946,6 +2955,7 @@
   }
   function drawLevelCard(ctx, st) {
     st = obj(st);
+    if (isTouchOn()) { drawLevelCardTouch(ctx, st); return; }
     var x = num(st.x, 0), y = num(st.y, 0), idx = Math.round(clamp(num(st.index, 1), 0, 99)), name = str(st.name, ''), theme = oneOf(st.theme, ['forest', 'cliff', 'mine', 'salt'], 'forest');
     var state = oneOf(st.state, ['sealed', 'buyable', 'open', 'cleared'], 'sealed'), boss = idx === 8 || theme === 'salt';
     var rc = Math.round(clamp(num(st.repairedCount, 0), 0, 3)), scn = Math.round(clamp(num(st.siteCount, 0), 0, 9));
@@ -3018,8 +3028,108 @@
     rr(ctx, x - 4, y - 4, w + 8, h + 8, 11); ctx.lineWidth = 4; ctx.strokeStyle = K.select; ctx.stroke();
     poly(ctx, [x + w / 2 - 8, y - 5, x + w / 2 + 8, y - 5, x + w / 2, y + 4]); ctx.fillStyle = K.select; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = K.edge; ctx.stroke();
   }
+
+  // ---------- 觸控模式的關卡卡片(手機字級下限: 字 21px、小圖示 30px; 電腦版不走這裡) ----------
+  // 卡片 160×182: 縮圖 128×72 在 (16,8)(原縮圖 160×90 的 0.8 倍); 名稱條 (5,84) 150×94 三行 —
+  // 第 1 行(中心 y+97)名稱 + 通關秒數(右緣 x+152)/ 可解鎖時 A 鍵帽; 第 2 行(y+128)木材、石頭; 第 3 行(y+160)水晶、魔核, 位置固定。
+  // 沒有產量的那格畫淡色 0(位置固定比留空好對照); 未通關卡片的狀態字放第 2 行
+  var TC = { W: 160, H: 182, TX: 16, TY: 8, TW: 128, TH: 72, K: 0.8, L1: 97, L2: 128, L3: 160 };
+  function cardH() { return isTouchOn() ? TC.H : 136; }
+  function cardW() { return isTouchOn() ? TC.W : 176; }
+  // 縮圖區的「虛擬座標」(原版 x+8, y+8, 160×90)換成觸控版實際位置: 縮圖內的圖形(去色灰幕、鎖頭以外的裝飾)照原版畫再縮放
+  function tcThumbXf(ctx, x, y) { ctx.translate(x + TC.TX, y + TC.TY); ctx.scale(TC.K, TC.K); ctx.translate(-(x + 8), -(y + 8)); }
+  function tcNum(v) {
+    v = clamp(num(v, 0), 0, 1e9);
+    if (v >= 1000) return (Math.round(v / 100) / 10) + 'k';
+    if (v >= 10) return String(Math.round(v)); // 10 以上取整數: 一格最多 3 位數, 和隔壁那格留得出空隙
+    return fmt1(v);
+  }
+  function tcRate(ctx, kind, v, sx, cy) {
+    var zero = !(v > 0);
+    ctx.save(); if (zero) ctx.globalAlpha *= 0.35;
+    matIcon(ctx, kind, sx + 15, cy, 30, true);
+    text(ctx, zero ? '0' : tcNum(v), sx + 32, cy + 0.5, 21, zero ? K.inkDim : K.ink, 'left', true);
+    ctx.restore();
+  }
+  function drawLevelCardTouch(ctx, st) {
+    var x = num(st.x, 0), y = num(st.y, 0), idx = Math.round(clamp(num(st.index, 1), 0, 99)), name = str(st.name, ''), theme = oneOf(st.theme, ['forest', 'cliff', 'mine', 'salt'], 'forest');
+    var state = oneOf(st.state, ['sealed', 'buyable', 'open', 'cleared'], 'sealed'), boss = idx === 8 || theme === 'salt';
+    var rc = Math.round(clamp(num(st.repairedCount, 0), 0, 3)), scn = Math.round(clamp(num(st.siteCount, 0), 0, 9)), live = state === 'open' || state === 'cleared';
+    var tint = state === 'sealed' ? '#241b14' : (live && scn === 3 ? mix(CARD_GREY, CARD_TINT[theme], rc / 3) : CARD_TINT[theme]);
+    var W = TC.W, H = TC.H, tx = x + TC.TX, ty = y + TC.TY, tW = TC.TW, tH = TC.TH, cx = x + W / 2;
+    ctx.save();
+    board(ctx, x, y, W, H, tint);
+    rr(ctx, x + 1.5, y + 1.5, W - 3, H - 3, 8);
+    if (state === 'cleared') { ctx.lineWidth = 3; ctx.strokeStyle = K.goodLight; ctx.stroke(); }
+    else if (state === 'buyable') { ctx.setLineDash([7, 5]); ctx.lineWidth = 2.5; ctx.strokeStyle = K.select; ctx.stroke(); ctx.setLineDash([]); }
+    else if (state === 'open') { ctx.lineWidth = 2; ctx.strokeStyle = boss ? '#e8a8d8' : '#c9b896'; ctx.stroke(); }
+    if (boss) { rr(ctx, x + 4.5, y + 4.5, W - 9, H - 9, 6); ctx.lineWidth = 1.5; ctx.strokeStyle = '#c47d9c'; ctx.stroke(); }
+    ctx.fillStyle = K.edge; ctx.fillRect(tx - 1, ty - 1, tW + 2, tH + 2);
+    if (live) { ctx.fillStyle = '#10141c'; ctx.fillRect(tx, ty, tW, tH); }
+    else if (boss && state === 'sealed') {
+      ctx.fillStyle = lin(ctx, 0, ty, 0, ty + tH, [0, '#2a1f4e', 1, '#7a5078']); ctx.fillRect(tx, ty, tW, tH);
+      gateGlyph(ctx, cx, ty + 30, 0.8, '#4e3a68');
+      var ns = '還差 ' + Math.round(clamp(num(st.need, 1), 0, 99)) + ' 關', nw = tw(ctx, ns, 21, true) + 16;
+      rr(ctx, cx - nw / 2, ty + tH - 32, nw, 28, 4); ctx.fillStyle = K.parchDim; ctx.fill();
+      text(ctx, ns, cx, ty + tH - 17.5, 21, K.ink, 'center', true);
+    } else {
+      ctx.fillStyle = '#1a1612'; ctx.fillRect(tx, ty, tW, tH);
+      lockIcon(ctx, cx, ty + 20, 26, state === 'sealed' ? '#6a5e4c' : K.select);
+      var cm = costLine(ctx, st.cost, st.stock, 0, 0, 21, 'center', null, true), pw = Math.min(W - 6, cm.w + 14);
+      rr(ctx, cx - pw / 2, ty + tH - 33, pw, 30, 4); ctx.fillStyle = state === 'sealed' ? K.parchDim : K.parch; ctx.fill();
+      costLine(ctx, st.cost, st.stock, cx, ty + tH - 18, 21, 'center');
+    }
+    rr(ctx, x + 5, y + 84, W - 10, 94, 4); ctx.fillStyle = state === 'sealed' ? K.parchDim : K.parch; ctx.fill();
+    var inkN = state === 'sealed' ? '#5e5240' : K.ink, L1 = y + TC.L1, L2 = y + TC.L2, L3 = y + TC.L3;
+    var tsec = state === 'cleared' && st.recordTime != null, tkey = state === 'buyable';
+    var sec = tsec ? fmt1(st.recordTime) + 's' : '', secW = tsec ? tw(ctx, sec, 21, true) : (tkey ? 30 : 0);
+    fitText(ctx, idx + ' ' + name, x + 10, L1, 21, inkN, W - 18 - secW - (secW ? 6 : 0));
+    if (tsec) text(ctx, sec, x + W - 8, L1, 21, K.ink, 'right', true);
+    if (tkey) keycap(ctx, 'z', x + W - 22, L1, 14, 'hot');
+    if (state === 'cleared') {
+      var rt = mats(st.rates);
+      tcRate(ctx, 'wood', rt.wood, x + 6, L2); tcRate(ctx, 'stone', rt.stone, x + 82, L2);
+      tcRate(ctx, 'crystal', rt.crystal, x + 6, L3); tcRate(ctx, 'core', rt.core, x + 82, L3);
+    } else if (state === 'open') text(ctx, '未過關', x + 10, L2, 21, K.inkDim, 'left', true);
+    else if (state === 'buyable') text(ctx, '可解鎖', x + 10, L2, 21, K.selectDeep, 'left', true);
+    else fitText(ctx, boss ? '7 關全過才開放' : '前一關未過', x + 10, L2, 21, '#5e5240', W - 18);
+    if (state === 'sealed') { rr(ctx, x, y, W, H, 8); ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fill(); }
+    ctx.restore();
+  }
+  function drawCardOverlayTouch(ctx, st) {
+    var x = num(st.x, 0), y = num(st.y, 0), sm2 = num(st.speedMul, 1), i;
+    var tx = x + TC.TX, ty = y + TC.TY, tW = TC.TW, tH = TC.TH;
+    ctx.save();
+    ctx.save(); tcThumbXf(ctx, x, y); repairVeil(ctx, x, y, st.regions); ctx.restore(); // 區域座標由 game.js 照原版縮圖算, 這裡整塊縮放
+    if (st.live !== false) { // 鎖住的卡片: 解鎖花費標籤比縮圖寬, 不畫縮圖框(會穿過標籤)
+      ctx.lineWidth = 2; ctx.strokeStyle = K.edge; ctx.strokeRect(tx - 1, ty - 1, tW + 2, tH + 2);
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,215,160,0.35)'; ctx.strokeRect(tx + 0.5, ty + 0.5, tW - 1, tH - 1);
+    }
+    if (sm2 > 1.001) {
+      var lab = '×' + (Math.round(sm2 * 100) / 100), bw = tw(ctx, lab, 21, true) + 32;
+      rr(ctx, tx + tW - bw - 2, ty + 2, bw, 28, 4); ctx.fillStyle = '#f0c27a'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = K.edge; ctx.stroke();
+      itemIcon(ctx, 'gear', tx + tW - bw + 12, ty + 16, 22);
+      text(ctx, lab, tx + tW - bw + 26, ty + 16.5, 21, K.ink, 'left', true);
+    }
+    if (st.newArea === true) newAreaChip(ctx, tx + 3, ty + tH - 16, 'left', '新區域', 21);
+    if (st.replayP !== null && st.replayP !== undefined && isFinite(Number(st.replayP))) {
+      var p = clamp(Number(st.replayP), 0, 1), bx = tx, by = ty + tH + 1;
+      ctx.fillStyle = '#0c1016'; ctx.fillRect(bx, by, tW, 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillRect(bx, by, tW * p, 4);
+      var marks = arr(st.marks).slice(0, 60);
+      for (i = 0; i < marks.length; i++) {
+        var m = obj(marks[i]), mp = clamp(num(m.p, 0), 0, 1), kind = oneOf(m.kind, KINDS, 'wood'), passed = p >= mp, fresh = passed && p - mp < 0.03;
+        ctx.globalAlpha = passed ? 1 : 0.45; circle(ctx, bx + tW * mp, by + 2, fresh ? 3 : 2); ctx.fillStyle = passed ? PAL[kind] : PAL[kind + 'Dark']; ctx.fill();
+        if (fresh) { ctx.lineWidth = 1; ctx.strokeStyle = '#ffffff'; ctx.stroke(); }
+      }
+      ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.fillRect(bx + tW * p - 1, by - 1, 2, 6);
+    }
+    if (st.selected === true) selFrame(ctx, x, y, TC.W, TC.H);
+    ctx.restore();
+  }
   function drawCardOverlay(ctx, st) {
     st = obj(st);
+    if (isTouchOn()) { drawCardOverlayTouch(ctx, st); return; }
     var x = num(st.x, 0), y = num(st.y, 0), sm2 = num(st.speedMul, 1), i;
     ctx.save();
     repairVeil(ctx, x, y, st.regions);
@@ -3181,16 +3291,17 @@
     var status = s.status === 'done' ? 'done' : 'open', role = oneOf(s.role, ROLES, 'shortcut'), kind = oneOf(s.kind, ['bridge', 'stairs', 'rubble', 'nestgate'], 'rubble');
     var ty = tag(ctx, x, y, 150, 130, sel ? (rowOn ? 'hot' : 'cold') : null, status === 'done' ? 'done' : 'normal'), mid = x + 75;
     sitePin(ctx, i + 1, x + 16, ty + 16, 10, 13, status === 'done');
-    roleMark(ctx, role, mid, ty + 32, 1, status === 'done');
-    text(ctx, ROLE_NAME[role], mid, ty + 58, 13, status === 'done' ? K.inkDim : ROLE_INK[role], 'center', true);
-    text(ctx, SITE_KIND_NAME[kind], mid, ty + 76, 12, K.inkDim, 'center', true);
+    var tch = isTouchOn(); // 觸控模式(字級下限 21px): 用途圖示移到右上角, 文字列拉開
+    roleMark(ctx, role, tch ? x + 132 : mid, tch ? ty + 18 : ty + 32, tch ? 0.8 : 1, status === 'done');
+    text(ctx, ROLE_NAME[role], mid, tch ? ty + 34 : ty + 58, 13, status === 'done' ? K.inkDim : ROLE_INK[role], 'center', true);
+    text(ctx, SITE_KIND_NAME[kind], mid, tch ? ty + 54 : ty + 76, 12, K.inkDim, 'center', true);
     if (status === 'done') {
       ctx.save(); ctx.translate(mid, ty + 106); ctx.rotate(-0.12);
       rr(ctx, -40, -12, 80, 24, 4); ctx.lineWidth = 2.5; ctx.strokeStyle = K.good; ctx.stroke();
       text(ctx, '已完工', 0, 0.5, 14, K.good, 'center', true); ctx.restore();
     } else {
-      var c = costLine(ctx, s.cost, stock, mid, ty + 96, 13, 'center');
-      actKey(ctx, 'z', '修復', mid, ty + 116, c.ok ? (sel && rowOn ? 'hot' : 'idle') : 'off', 'center', 11);
+      var c = costLine(ctx, s.cost, stock, mid, tch ? ty + 78 : ty + 96, 13, 'center');
+      actKey(ctx, 'z', '修復', mid, tch ? ty + 111 : ty + 116, c.ok ? (sel && rowOn ? 'hot' : 'idle') : 'off', 'center', 11);
     }
   }
   function drawLevelPanel(ctx, st) {
@@ -3217,11 +3328,12 @@
     if (st.recordTime == null) {
       text(ctx, '尚無回放', 380, ry + 64, 20, K.inkDim, 'center', true);
     } else {
-      if (st.recordCls != null) clsIcon(ctx, st.recordCls, 160, ry + 20, 22);
-      text(ctx, (st.recordCls != null ? CLS_NAME[oneOf(st.recordCls, CLS, 'sword')] + '  ' : '') + fmt1(st.recordTime) + ' 秒', 176, ry + 21, 18, K.ink, 'left', true);
+      var rdx = isTouchOn() ? 26 : 0; // 觸控模式: 標籤字放大到 21px, 右邊內容往右讓開
+      if (st.recordCls != null) clsIcon(ctx, st.recordCls, 160 + rdx, ry + 20, 22);
+      text(ctx, (st.recordCls != null ? CLS_NAME[oneOf(st.recordCls, CLS, 'sword')] + '  ' : '') + fmt1(st.recordTime) + ' 秒', 176 + rdx, ry + 21, 18, K.ink, 'left', true);
       ctx.fillStyle = 'rgba(60,40,20,0.25)'; ctx.fillRect(76, ry + 42, 608, 1);
       text(ctx, '每分鐘', 76, ry + 72, 13, K.inkDim, 'left', true);
-      ratesRow(ctx, st.rates, 130, ry + 72, 122, 15);
+      ratesRow(ctx, st.rates, 130 + rdx, ry + 72, 122, 15);
       var sp = num(st.speedMul, 1);
       if (sp > 1.001) { itemIcon(ctx, 'gear', 616, ry + 100, 16); text(ctx, '回放 ×' + (Math.round(sp * 100) / 100), 628, ry + 100.5, 12, K.ink, 'left', true); }
     }
@@ -3330,8 +3442,9 @@
       } else {
         var en = ents[i - 1];
         itemIcon(ctx, en.type, 312, my, 34);
-        text(ctx, ITEM_NAME[en.type], 342, my - 8, 16, K.ink, 'left', true);
-        text(ctx, ITEM_FX[en.type], 342, my + 11, 11, K.inkDim, 'left', true);
+        var dt2 = isTouchOn() ? 2 : 0; // 觸控模式: 兩行字都是 21px, 上下再拉開一點
+        text(ctx, ITEM_NAME[en.type], 342, my - 8 - dt2, 16, K.ink, 'left', true);
+        text(ctx, ITEM_FX[en.type], 342, my + 11 + dt2 - 1, 11, K.inkDim, 'left', true);
         text(ctx, '×' + en.n, 652, my + 0.5, 18, K.ink, 'right', true);
       }
     }
@@ -3373,7 +3486,8 @@
     board(ctx, 240, 120, 800, 480);
     text(ctx, '商店', 264, 148, 22, K.cream, 'left', true, 4, K.edge);
     rr(ctx, 860, 134, 156, 28, 5); ctx.fillStyle = K.parch; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = K.edge; ctx.stroke();
-    text(ctx, '持有', 870, 148.5, 12, K.inkDim, 'left', true); matIcon(ctx, 'crystal', 912, 148, 20); text(ctx, intStr(stock.crystal), 926, 149, 17, K.ink, 'left', true);
+    var hdx = isTouchOn() ? 14 : 0; // 觸控模式:「持有」放大到 21px, 圖示與數字往右讓開
+    text(ctx, '持有', 870, 148.5, 12, K.inkDim, 'left', true); matIcon(ctx, 'crystal', 912 + hdx, 148, 20); text(ctx, intStr(stock.crystal), 926 + hdx, 149, 17, K.ink, 'left', true);
     for (i = 0; i < 6; i++) {
       var e = obj(entries[i]), y = 180 + 56 * i, type = oneOf(e.type, ITEMS, 'gear'), max = Math.round(clamp(num(e.max, 1), 0, 99)), left = Math.round(clamp(num(e.left, max), 0, 99));
       var sold = left <= 0, isSel = i === sel, has = i < entries.length;
@@ -3382,8 +3496,9 @@
       if (isSel) { poly(ctx, [254, ty + 16, 266, ty + 25, 254, ty + 34]); ctx.fillStyle = K.select; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = K.edge; ctx.stroke(); }
       ctx.save(); if (sold) ctx.globalAlpha *= 0.55;
       itemIcon(ctx, type, 300, ty + 25, 40);
-      text(ctx, ITEM_NAME[type], 330, ty + 17, 16, K.ink, 'left', true);
-      text(ctx, ITEM_FX[type], 330, ty + 36, 12, K.inkDim, 'left', true);
+      var st2 = isTouchOn() ? 3 : 0; // 觸控模式: 兩行字都是 21px, 上下拉開
+      text(ctx, ITEM_NAME[type], 330, ty + 17 - st2, 16, K.ink, 'left', true);
+      text(ctx, ITEM_FX[type], 330, ty + 36 + st2, 12, K.inkDim, 'left', true);
       ctx.restore();
       if (sold) {
         ctx.save(); ctx.translate(840, ty + 25); ctx.rotate(-0.08); rr(ctx, -44, -13, 88, 26, 4); ctx.lineWidth = 2.5; ctx.strokeStyle = '#5a5448'; ctx.stroke(); text(ctx, '售完', 0, 0.5, 16, '#5a5448', 'center', true); ctx.restore();
@@ -3412,11 +3527,12 @@
       ell(ctx, x + 100, ty + 112, 40, 7); ctx.fillStyle = 'rgba(60,40,20,0.25)'; ctx.fill();
       heroBig(ctx, cls, x + 100, ty + 67, 2.5, owned ? 1 : 0.35);
       if (!owned) lockIcon(ctx, x + 100, ty + 70, 34, '#4a3e2e');
-      text(ctx, CLS_NAME[cls], x + 100, ty + 136, 20, owned ? K.ink : '#5e5240', 'center', true);
-      text(ctx, '特性: ' + CLS_TRAIT[cls], x + 100, ty + 158, 13, K.inkDim, 'center', true);
-      text(ctx, '技能: ' + CLS_SKILL[cls], x + 100, ty + 178, 13, K.inkDim, 'center', true);
-      if (!owned) text(ctx, '到升級所解鎖', x + 100, ty + 202, 13, '#8a3a1a', 'center', true);
-      else if (isSel) actKey(ctx, 'z', '出發', x + 100, ty + 201, 'hot', 'center', 13);
+      var cy0 = isTouchOn() ? -8 : 0, cgap = isTouchOn() ? 22 : 0; // 觸控模式: 字都是 21px, 三行拉開、出發鍵往下
+      text(ctx, CLS_NAME[cls], x + 100, ty + 136 + cy0, 20, owned ? K.ink : '#5e5240', 'center', true);
+      text(ctx, '特性: ' + CLS_TRAIT[cls], x + 100, cgap ? ty + 128 + cgap : ty + 158, 13, K.inkDim, 'center', true);
+      text(ctx, '技能: ' + CLS_SKILL[cls], x + 100, cgap ? ty + 128 + cgap * 2 : ty + 178, 13, K.inkDim, 'center', true);
+      if (!owned) text(ctx, '到升級所解鎖', x + 100, cgap ? ty + 204 : ty + 202, 13, '#8a3a1a', 'center', true);
+      else if (isSel) actKey(ctx, 'z', '出發', x + 100, cgap ? ty + 204 : ty + 201, 'hot', 'center', 13);
     }
     keyRow(ctx, [['←→', '選擇'], ['Z', '出發'], ['X', '返回']], 316, 498, 13, 'left');
     ctx.restore();

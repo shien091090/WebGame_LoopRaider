@@ -46,7 +46,6 @@ window.LEVEL_DEFS = [
     start: [2, 12], goal: [21, 15],
     spikes: [], cracks: [],
     picks: [
-      ['wood', 12, 14],
       ['crystal', 1, 14],
       ['crystal', 2, 14],
       ['wood', 9, 10],

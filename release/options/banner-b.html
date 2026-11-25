@@ -2,96 +2,141 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>banner-b 重演之窗</title>
-<style>body{margin:0;overflow:hidden;background:#000}canvas{display:block}</style>
+<title>banner-d 白晝重演地圖</title>
+<style>body{margin:0;overflow:hidden;background:#cfeedd}canvas{display:block}</style>
 </head>
 <body>
 <canvas id="c" width="1680" height="720"></canvas>
 <script src="../game/art/art.js"></script>
+<script src="banner-common.js"></script>
 <script>
-// 橫幅 B: 開始畫面的「重演之窗」排成一列, 四個地形各自在重演一段通關, 素材從窗裡落到金色輸送帶、在右下堆成小山
+// 橫幅 D: 明亮的大地圖俯瞰。四塊關卡地景沿一條環狀路排列, 每塊都在重演一段通關;
+// 小隊沿環路不停繞圈, 每塊地景冒出的素材順著支線流進環中央的營地, 堆成一座發光的小山
 (function () {
-  var cv = document.getElementById('c'), ctx = cv.getContext('2d'), A = window.Art;
-  var BW = 1680, BH = 720, TAU = Math.PI * 2, i, j;
-  function hash(a, b) { var h = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return h - Math.floor(h); }
-  function at(x, y, k, fn) { ctx.save(); ctx.translate(x, y); ctx.scale(k, k); fn(); ctx.restore(); }
-  // 背景: 開始畫面的深藍放射底 + 放射光 + 星點
-  var bg = ctx.createRadialGradient(930, 330, 40, 930, 330, 1100);
-  bg.addColorStop(0, '#2c3a62'); bg.addColorStop(0.5, '#18203a'); bg.addColorStop(1, '#0c1020');
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, BW, BH);
-  ctx.save(); ctx.translate(930, 330); ctx.fillStyle = 'rgba(255,230,160,0.035)';
-  for (i = 0; i < 14; i++) { var a = i * TAU / 14 + 0.12; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a - 0.06) * 1300, Math.sin(a - 0.06) * 1300); ctx.lineTo(Math.cos(a + 0.06) * 1300, Math.sin(a + 0.06) * 1300); ctx.closePath(); ctx.fill(); }
-  ctx.restore();
-  for (i = 0; i < 110; i++) { ctx.fillStyle = 'rgba(255,255,255,' + (0.12 + hash(i, 3) * 0.3).toFixed(2) + ')'; ctx.beginPath(); ctx.arc(hash(i, 1) * BW, hash(i, 2) * BH, 0.8 + hash(i, 4) * 1.3, 0, TAU); ctx.fill(); }
+  var B = BN.make(), ctx = B.ctx, A = B.A, TAU = B.TAU, i, j;
+  // ---- 地圖紙: 明亮草原 + 淡格線 + 樹叢 / 小丘 ----
+  ctx.fillStyle = B.vgrad(0, 720, [0, '#d9f4e4', 1, '#b6e6c6']); ctx.fillRect(0, 0, 1680, 720);
+  ctx.strokeStyle = 'rgba(90,150,120,0.12)'; ctx.lineWidth = 1;
+  ctx.beginPath(); for (i = 0; i <= 1680; i += 48) { ctx.moveTo(i + 0.5, 0); ctx.lineTo(i + 0.5, 720); } for (i = 0; i <= 720; i += 48) { ctx.moveTo(0, i + 0.5); ctx.lineTo(1680, i + 0.5); } ctx.stroke();
+  // 河(右上 → 右下, 淺藍)
+  ctx.beginPath(); ctx.moveTo(1560, -10);
+  for (i = 0; i <= 74; i++) { var ry = i * 10; ctx.lineTo(1560 + Math.sin(ry / 90) * 30 + ry * 0.06, ry); }
+  ctx.lineWidth = 46; ctx.strokeStyle = '#8fd0ea'; ctx.stroke(); ctx.lineWidth = 30; ctx.strokeStyle = '#b8e4f4'; ctx.stroke();
+  // 樹叢與小丘(散布在地圖四周)
+  function tree(x, y, s) {
+    ctx.fillStyle = 'rgba(60,110,70,0.18)'; ctx.beginPath(); ctx.ellipse(x + 4, y + s * 0.9, s * 0.9, s * 0.3, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#7a5a36'; ctx.fillRect(x - s * 0.12, y, s * 0.24, s * 0.8);
+    ctx.fillStyle = '#5fb565'; ctx.beginPath(); ctx.arc(x, y, s * 0.7, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#86d17d'; ctx.beginPath(); ctx.arc(x - s * 0.2, y - s * 0.22, s * 0.38, 0, TAU); ctx.fill();
+  }
+  for (i = 0; i < 46; i++) {
+    var tx = B.hash(i, 1) * 1680, ty = B.hash(i, 2) * 720;
+    var ex = (tx - 1010) / 520, ey = (ty - 385) / 300;
+    if (ex * ex + ey * ey < 1) continue;
+    tree(tx, ty, 14 + B.hash(i, 3) * 12);
+  }
+  ctx.fillStyle = 'rgba(150,200,140,0.5)';
+  [[260, 380, 120, 50], [180, 470, 90, 34], [1600, 640, 100, 40]].forEach(function (h) { ctx.beginPath(); ctx.ellipse(h[0], h[1], h[2], h[3], 0, Math.PI, TAU); ctx.fill(); });
 
-  // 窗後的金色環道(橫向一條, 串起四扇窗)
-  var WY = 300, WR = 118, WX = [440, 760, 1080, 1400];
-  ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(WX[0] - 150, WY); ctx.lineTo(WX[3] + 150, WY);
-  ctx.lineWidth = 26; ctx.strokeStyle = '#161220'; ctx.stroke(); ctx.lineWidth = 20; ctx.strokeStyle = '#2c2438'; ctx.stroke();
-  ctx.save(); ctx.setLineDash([10, 16]); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(242,201,76,0.55)'; ctx.stroke(); ctx.restore();
+  // ---- 環狀路 ----
+  var CX = 1010, CY = 385, RX = 450, RY = 228;
+  function ringPt(a) { return [CX + Math.cos(a) * RX, CY + Math.sin(a) * RY]; }
+  ctx.beginPath(); ctx.ellipse(CX, CY, RX, RY, 0, 0, TAU);
+  ctx.lineWidth = 50; ctx.strokeStyle = '#c9a670'; ctx.stroke();
+  ctx.lineWidth = 42; ctx.strokeStyle = '#f0dcaa'; ctx.stroke();
+  ctx.save(); ctx.setLineDash([16, 18]); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(170,120,60,0.6)'; ctx.stroke(); ctx.restore();
+  // 方向箭頭(順時針)
+  for (i = 0; i < 12; i++) {
+    var a = i * TAU / 12 + 0.26, p = ringPt(a), tang = Math.atan2(Math.cos(a) * RY, -Math.sin(a) * RX);
+    ctx.save(); ctx.translate(p[0], p[1]); ctx.rotate(tang);
+    ctx.beginPath(); ctx.moveTo(-6, -9); ctx.lineTo(5, 0); ctx.lineTo(-6, 9); ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(232,160,60,0.85)'; ctx.stroke();
+    ctx.restore();
+  }
 
-  // 一扇重演之窗: 地形背景 + 地面 + 主角 vs 怪物 + 剛噴出的素材
-  var WINS = [
-    { theme: 'forest', cls: 'sword', pose: 'slash', mat: 'wood', foe: function () { A.drawBoar(ctx, { x: 0, y: 0, facing: -1, state: 'stun', flingDir: 0, hit: false, brood: false, t: 0.2 }); }, fh: 16 },
-    { theme: 'cliff', cls: 'hunter', pose: 'idle', mat: 'stone', foe: function () { A.drawRam(ctx, { x: 0, y: 0, facing: -1, state: 'walk', flingDir: 0, hit: false, brood: false, t: 0.1 }); }, fh: 18 },
-    { theme: 'mine', cls: 'bomber', pose: 'throw', mat: 'crystal', foe: function () { A.drawBeetle(ctx, { x: 0, y: 0, facing: -1, state: 'crawl', flingDir: 0, fuseT: 0.8, fuseDur: 0.8, hit: false, brood: false, t: 0.1 }); }, fh: 12 },
-    { theme: 'salt', cls: 'sword', pose: 'run', mat: 'core', foe: function () { A.drawShieldman(ctx, { x: 0, y: 0, facing: -1, state: 'walk', hasShield: true, flingDir: 0, hit: false, brood: false, t: 0.3 }); }, fh: 20 }
+  // ---- 中央營地: 素材小山 + 支線 ----
+  var HX = CX, HB = 470;
+  // 四條支線(關卡 → 營地)
+  var PLOTS = [
+    { a: Math.PI, theme: 'forest', cls: 'sword', pose: 'slash', mat: 'wood', foe: 'boar' },
+    { a: -Math.PI / 2, theme: 'cliff', cls: 'hunter', pose: 'idle', mat: 'stone', foe: 'ram' },
+    { a: 0, theme: 'mine', cls: 'bomber', pose: 'throw', mat: 'crystal', foe: 'beetle' },
+    { a: Math.PI / 2, theme: 'salt', cls: 'sword', pose: 'run', mat: 'core', foe: 'shield' }
   ];
-  var CAP = { forest: '#5cbf45', cliff: '#e8eef5', mine: '#9c8a70', salt: '#e8a8d8' };
-  function windowAt(cx, cy, w, idx) {
-    ctx.save(); ctx.translate(cx, cy);
-    var halo = ctx.createRadialGradient(0, 0, WR, 0, 0, WR + 26);
-    halo.addColorStop(0, 'rgba(255,214,90,0.45)'); halo.addColorStop(1, 'rgba(255,214,90,0)');
-    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, 0, WR + 26, 0, TAU); ctx.fill();
-    ctx.beginPath(); ctx.arc(0, 0, WR + 9, 0, TAU); ctx.fillStyle = '#161220'; ctx.fill();
-    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, WR, 0, TAU); ctx.clip();
-    at(0, 0, 0.42, function () { ctx.translate(-640, -430); A.drawBackground(ctx, { theme: w.theme, t: 2 + idx }); });
-    var GT = 58, GK = 1.35;
-    ctx.save(); ctx.scale(GK, GK);
-    for (j = -3; j <= 2; j++) {
-      A.drawGround(ctx, { x: j * 40 + 20, y: GT / GK + 20, theme: w.theme, open: { n: true } });
-      A.drawGround(ctx, { x: j * 40 + 20, y: GT / GK + 60, theme: w.theme, open: {} });
-    }
-    ctx.restore();
-    var HK = 2.3;
-    at(-34, GT - 18 * HK, HK, function () { A.drawPlayer(ctx, { x: 0, y: 0, cls: w.cls, facing: 1, pose: w.pose, poseT: w.pose === 'slash' ? 0.05 : 0.15, swingIdx: 0 }); });
-    at(58, GT - w.fh * 2.0, 2.0, w.foe);
-    A.icons.mat(ctx, w.mat, 12, -58, 34);
-    ctx.restore();
-    ctx.beginPath(); ctx.arc(0, 0, WR - 2, 0, TAU); ctx.lineWidth = 6; ctx.strokeStyle = CAP[w.theme]; ctx.stroke();
+  PLOTS.forEach(function (pl, k) {
+    var p = ringPt(pl.a), ex = HX + Math.cos(pl.a) * 90, ey = HB - 70 + Math.sin(pl.a) * 40;
+    ctx.save(); ctx.setLineDash([6, 12]); ctx.lineCap = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(242,190,70,0.75)';
+    ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.quadraticCurveTo((p[0] + ex) / 2, (p[1] + ey) / 2 - 30, ex, ey); ctx.stroke(); ctx.restore();
+  });
+  B.glow(HX, HB - 70, 210, '255,220,110', 0.55);
+  var HEAP = [];
+  for (i = 0; i < 5; i++) for (j = 0; j <= 5 - i; j++) HEAP.push([(j - (5 - i) / 2) * 44, -i * 34]);
+  HEAP.forEach(function (h, k) { B.mat(B.KINDS[(k * 3 + 1) % 4], HX + h[0], HB + h[1] - 12, 46); });
+  // 營地兩側: 鐵砧小屋(升級所)與紅白棚小攤(商店) — 只用造型示意, 不放字
+  function hut(x, y) {
+    ctx.save(); ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = '#4a3020';
+    ctx.fillStyle = '#e9d6b4'; ctx.fillRect(x - 38, y - 40, 76, 52); ctx.strokeRect(x - 38, y - 40, 76, 52);
+    ctx.beginPath(); ctx.moveTo(x - 48, y - 38); ctx.lineTo(x, y - 76); ctx.lineTo(x + 48, y - 38); ctx.closePath(); ctx.fillStyle = '#c8603e'; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#7a5a40'; ctx.fillRect(x - 11, y - 20, 22, 32);
+    ctx.fillStyle = '#6a7080'; ctx.fillRect(x + 22, y - 72, 10, 22); ctx.strokeRect(x + 22, y - 72, 10, 22);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; [[30, -84, 7], [36, -98, 9], [30, -114, 10]].forEach(function (s) { ctx.beginPath(); ctx.arc(x + s[0], y + s[1], s[2], 0, TAU); ctx.fill(); });
     ctx.restore();
   }
-
-  // 輸送帶(右下, 避開左下標籤區): 金色環道同款
-  var CY = 600, CX0 = 600, CX1 = 1300;
-  ctx.beginPath(); ctx.moveTo(CX0, CY); ctx.lineTo(CX1, CY);
-  ctx.lineWidth = 30; ctx.strokeStyle = '#161220'; ctx.stroke(); ctx.lineWidth = 24; ctx.strokeStyle = '#2c2438'; ctx.stroke();
-  ctx.save(); ctx.setLineDash([12, 14]); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(242,201,76,0.7)'; ctx.stroke(); ctx.restore();
-  // 窗底落下的素材弧線
-  var KINDS = ['wood', 'stone', 'crystal', 'core'];
-  for (i = 0; i < 4; i++) {
-    var sx = WX[i], sy = WY + WR + 8, ex = Math.max(CX0 + 40, WX[i] + 70), ey = CY - 22;
-    if (i === 3) ex = 1300;
-    ctx.save(); ctx.setLineDash([4, 10]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,214,90,0.5)';
-    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo((sx + ex) / 2, sy + 10, ex, ey); ctx.stroke(); ctx.restore();
-    for (j = 0; j < 2; j++) {
-      var u = 0.35 + j * 0.4, v = 1 - u, mx = (sx + ex) / 2, my = sy + 10;
-      A.icons.mat(ctx, KINDS[(i + j) % 4], v * v * sx + 2 * v * u * mx + u * u * ex, v * v * sy + 2 * v * u * my + u * u * ey, 30);
+  function stall(x, y) {
+    ctx.save(); ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = '#4a3020';
+    ctx.fillStyle = '#7a4e26'; ctx.fillRect(x - 32, y - 40, 6, 52); ctx.fillRect(x + 26, y - 40, 6, 52);
+    ctx.fillStyle = '#b07840'; ctx.fillRect(x - 40, y - 6, 80, 18); ctx.strokeRect(x - 40, y - 6, 80, 18);
+    for (var s = 0; s < 5; s++) {
+      var ax = x - 46 + s * 18.4;
+      ctx.beginPath(); ctx.moveTo(ax, y - 56); ctx.lineTo(ax + 18.4, y - 56); ctx.lineTo(ax + 18.4, y - 42); ctx.arc(ax + 9.2, y - 42, 9.2, 0, Math.PI); ctx.closePath();
+      ctx.fillStyle = s % 2 ? '#fff4dc' : '#e0503e'; ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
     }
+    A.icons.item(ctx, 'gear', x - 14, y - 18, 20); A.icons.item(ctx, 'heart', x + 14, y - 18, 20);
+    ctx.restore();
   }
-  // 輸送帶上的素材: 往右越排越密
-  for (i = 0; i < 12; i++) { var px = CX0 + 30 + i * 56; A.icons.mat(ctx, KINDS[i % 4], px, CY - 18, 30 + i * 1.2); }
-  // 右下素材小山(越堆越多)
-  var hx = 1415, hb = 640;
-  var glow = ctx.createRadialGradient(hx, hb - 50, 10, hx, hb - 50, 170);
-  glow.addColorStop(0, 'rgba(255,214,90,0.55)'); glow.addColorStop(1, 'rgba(255,214,90,0)');
-  ctx.fillStyle = glow; ctx.fillRect(hx - 170, hb - 220, 340, 300);
-  var HEAP = [[-90, 0], [-45, 4], [0, 6], [45, 4], [90, 0], [-68, -38], [-22, -36], [22, -38], [68, -36], [-45, -74], [0, -76], [45, -72], [-22, -110], [22, -108], [0, -144]];
-  for (i = 0; i < HEAP.length; i++) A.icons.mat(ctx, KINDS[(i * 3 + 1) % 4], hx + HEAP[i][0], hb - 20 + HEAP[i][1], 50);
+  hut(HX - 170, 470); stall(HX + 172, 470);
 
-  // 四扇窗最後畫(壓在環道上)
-  for (i = 0; i < 4; i++) windowAt(WX[i], WY, WINS[i], i);
+  // ---- 四塊關卡地景(圓角方框 + 重演中的小場景) ----
+  var PW = 236, PH = 150;
+  function plot(pl, k) {
+    var p = ringPt(pl.a), x = p[0], y = p[1];
+    ctx.save(); ctx.translate(x, y);
+    // 陰影 + 外框
+    ctx.fillStyle = 'rgba(40,80,60,0.25)'; roundRect(-PW / 2 + 6, -PH / 2 + 8, PW, PH, 18); ctx.fill();
+    roundRect(-PW / 2 - 7, -PH / 2 - 7, PW + 14, PH + 14, 22); ctx.fillStyle = '#fff8e6'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#a07c4c'; ctx.stroke();
+    ctx.save(); roundRect(-PW / 2, -PH / 2, PW, PH, 16); ctx.clip();
+    B.at(0, 0, 0.36, function () { ctx.translate(-640, -440); A.drawBackground(ctx, { theme: pl.theme, t: 3 + k }); });
+    if (pl.theme === 'mine') { ctx.fillStyle = 'rgba(255,214,150,0.55)'; ctx.fillRect(-PW, -PH, PW * 2, PH * 2); B.glow(0, -10, 140, '255,210,140', 0.5); }
+    if (pl.theme === 'salt') { ctx.fillStyle = 'rgba(255,210,220,0.25)'; ctx.fillRect(-PW, -PH, PW * 2, PH * 2); }
+    var GT = 38; B.ground(pl.theme, -PW, PW, GT, 1.1, 2);
+    var HK = 1.8;
+    B.hero(-40, GT, HK, pl.cls, pl.pose, { poseT: pl.pose === 'slash' ? 0.05 : 0.15 });
+    B.at(52, GT - 16 * 1.6, 1.6, function () {
+      var s = { x: 0, y: 0, facing: -1, flingDir: 0, hit: false, brood: false, t: 0.2 };
+      if (pl.foe === 'boar') { s.state = 'stun'; A.drawBoar(ctx, s); }
+      else if (pl.foe === 'ram') { s.state = 'walk'; ctx.translate(0, -2); A.drawRam(ctx, s); }
+      else if (pl.foe === 'beetle') { s.state = 'crawl'; ctx.translate(0, 4); A.drawBeetle(ctx, s); }
+      else { s.state = 'walk'; s.hasShield = true; ctx.translate(0, -4); A.drawShieldman(ctx, s); }
+    });
+    B.mat(pl.mat, 8, -40, 30, 0.6);
+    ctx.restore();
+    roundRect(-PW / 2, -PH / 2, PW, PH, 16); ctx.lineWidth = 5; ctx.strokeStyle = A.themes[pl.theme].cap === '#fbf3ec' ? '#e8a8d8' : (pl.theme === 'cliff' ? '#9fc0e0' : A.themes[pl.theme].cap); ctx.stroke();
+    // 重演標記: 右上角循環箭頭圓章
+    ctx.translate(PW / 2 - 4, -PH / 2 + 4);
+    ctx.beginPath(); ctx.arc(0, 0, 19, 0, TAU); ctx.fillStyle = '#aaefd5'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#2f7a62'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 10, -0.4, Math.PI * 1.55); ctx.lineWidth = 3.5; ctx.strokeStyle = '#2f7a62'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(9, -10); ctx.lineTo(13, -1); ctx.lineTo(3, -3); ctx.closePath(); ctx.fillStyle = '#2f7a62'; ctx.fill();
+    ctx.restore();
+  }
+  function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+  // ---- 環路上不停繞圈的小隊(殘影) + 沿路掉落的素材 ----
+  var RUN = [[-2.45, 'bomber'], [-2.25, 'hunter'], [-2.05, 'sword'], [-0.95, 'sword'], [0.62, 'hunter'], [0.85, 'bomber'], [2.3, 'sword'], [2.52, 'hunter']];
+  RUN.forEach(function (r, k) {
+    var p = ringPt(r[0]), dirx = -Math.sin(r[0]) * RX;
+    B.mat(B.KINDS[k % 4], p[0] - (dirx > 0 ? 26 : -26), p[1] - 22, 18);
+    B.hero(p[0], p[1] + 14, 1.35, r[1], 'run', { facing: dirx >= 0 ? 1 : -1, poseT: 0.1 * k, alpha: 0.95 });
+  });
+  PLOTS.forEach(plot);
 })();
 </script>
 </body>
